@@ -5,6 +5,8 @@ from __future__ import annotations
 import sys
 import termios
 import tty
+from collections.abc import Sequence
+from dataclasses import dataclass
 
 from enterprise_refactor.banner import AMBER, CYAN, LIME, MOSS, WHITE, _c
 
@@ -14,6 +16,14 @@ PHASES: tuple[tuple[str, str, str, str], ...] = (
     ("implement", "Implement", "run every phase unattended, then record a walkthrough", AMBER),
     ("exit", "Exit", "leave the CLI", MOSS),
 )
+
+
+@dataclass(frozen=True)
+class MenuRow:
+    id: str
+    title: str
+    detail: str = ""
+    color: str = WHITE
 
 
 def _hide_cursor() -> None:
@@ -26,7 +36,7 @@ def _show_cursor() -> None:
     sys.stdout.flush()
 
 
-def _read_key() -> str:
+def _read_key(*, number_keys: int = 0) -> str:
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
     try:
@@ -38,7 +48,7 @@ def _read_key() -> str:
             return "enter"
         if first in {"q", "Q"}:
             return "quit"
-        if first in {str(i) for i in range(1, len(PHASES) + 1)}:
+        if number_keys and first in {str(i) for i in range(1, number_keys + 1)}:
             return first
         if first in {"k", "K"}:
             return "up"
@@ -56,20 +66,57 @@ def _read_key() -> str:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
 
-def _draw(index: int, *, first: bool) -> None:
-    rows: list[str] = []
-    for i, (_, title, detail, color) in enumerate(PHASES):
+def _draw(rows: Sequence[MenuRow], index: int, *, first: bool) -> None:
+    lines: list[str] = []
+    for i, row in enumerate(rows):
         marker = ">" if i == index else " "
-        rows.append(
-            f"  {marker}  {_c(color, f'{title:<11}')} {_c(WHITE, detail)}"
-        )
-    block = "\n".join(rows)
+        detail = f" {_c(WHITE, row.detail)}" if row.detail else ""
+        lines.append(f"  {marker}  {_c(row.color, row.title)}{detail}")
+    block = "\n".join(lines)
     if not first:
-        sys.stdout.write(f"\033[{len(rows)}A\r")
+        sys.stdout.write(f"\033[{len(lines)}A\r")
     sys.stdout.write(block)
     if not block.endswith("\n"):
         sys.stdout.write("\n")
     sys.stdout.flush()
+
+
+def choose_item(
+    rows: Sequence[MenuRow],
+    *,
+    index: int = 0,
+    number_keys: bool = False,
+) -> str:
+    if not rows:
+        raise ValueError("choose_item requires at least one row")
+    if not sys.stdin.isatty() or not sys.stdout.isatty():
+        raise SystemExit("Pass a flag when stdin is not a terminal.")
+
+    index = index % len(rows)
+    numbered = min(9, len(rows)) if number_keys else 0
+    _hide_cursor()
+    try:
+        _draw(rows, index, first=True)
+        while True:
+            key = _read_key(number_keys=numbered)
+            if key == "up":
+                index = (index - 1) % len(rows)
+            elif key == "down":
+                index = (index + 1) % len(rows)
+            elif numbered and key in {str(i) for i in range(1, numbered + 1)}:
+                index = int(key) - 1
+            elif key == "enter":
+                sys.stdout.write("\n")
+                sys.stdout.flush()
+                return rows[index].id
+            elif key == "quit":
+                raise SystemExit(0)
+            _draw(rows, index, first=False)
+    except KeyboardInterrupt:
+        sys.stdout.write("\n")
+        raise
+    finally:
+        _show_cursor()
 
 
 def choose_phase(index: int = 0) -> str:
@@ -77,28 +124,8 @@ def choose_phase(index: int = 0) -> str:
         raise SystemExit(
             "Pass analyze, plan, or implement when stdin is not a terminal."
         )
-
-    index = index % len(PHASES)
-    _hide_cursor()
-    try:
-        _draw(index, first=True)
-        while True:
-            key = _read_key()
-            if key == "up":
-                index = (index - 1) % len(PHASES)
-            elif key == "down":
-                index = (index + 1) % len(PHASES)
-            elif key in {"1", "2", "3"}:
-                index = int(key) - 1
-            elif key == "enter":
-                sys.stdout.write("\n")
-                sys.stdout.flush()
-                return PHASES[index][0]
-            elif key == "quit":
-                raise SystemExit(0)
-            _draw(index, first=False)
-    except KeyboardInterrupt:
-        sys.stdout.write("\n")
-        raise
-    finally:
-        _show_cursor()
+    rows = [
+        MenuRow(id=key, title=f"{title:<11}", detail=detail, color=color)
+        for key, title, detail, color in PHASES
+    ]
+    return choose_item(rows, index=index, number_keys=True)

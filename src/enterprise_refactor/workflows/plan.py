@@ -14,6 +14,7 @@ from enterprise_refactor.agent import (
     parsed_from_run,
     send_and_stream,
 )
+from enterprise_refactor.branches import resolve_legacy_plan_branch
 from enterprise_refactor.config import Config, ask, clean
 from enterprise_refactor.state import WorkflowState, save_state
 
@@ -145,17 +146,20 @@ pr_url: <target repo pull request URL>
 
 
 def run(
-    config: Config, state: WorkflowState, *, prompt: str | None = None
+    config: Config,
+    state: WorkflowState,
+    *,
+    prompt: str | None = None,
+    analyze_branch: str | None = None,
 ) -> int:
-    if not state.analyze_branch:
-        print(
-            "Plan needs Analyze first. Run Analyze so a legacy analysis branch exists.",
-            file=sys.stderr,
-        )
-        return 1
+    state.analyze_branch = resolve_legacy_plan_branch(
+        config, state, analyze_branch=analyze_branch
+    )
+    save_state(state)
 
     modernization_ask = resolve_modernization_ask(prompt)
     stamp = date.today().strftime("%Y%m%d")
+    print(f"analyze branch  {state.analyze_branch}", flush=True)
     print("workflow  Plan", flush=True)
     try:
         with create_cloud_agent(

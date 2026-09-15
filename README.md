@@ -26,7 +26,7 @@ uv run enterprise-refactor implement
 | Workflow | What it does |
 | --- | --- |
 | **Analyze** | Discovery-only map of the legacy system (target repo is context). Pushes `refactor/analyze-<date>` on the **legacy** repo with `docs/modernization/CURRENT_STATE_ANALYSIS.md` and `docs/modernization/current-state.md`. |
-| **Plan** | Needs Analyze. Asks for a modernization prompt (`--prompt` / `CURSOR_PLAN_PROMPT`), then uses current-state docs to write a phased plan with subtasks on `refactor/plan-<date>` on the **target** repo (`plan.md`, `phases/`, `plan.json`) and opens a PR there. |
+| **Plan** | Asks for a modernization prompt (`--prompt` / `CURSOR_PLAN_PROMPT`), then uses current-state docs on a **legacy** branch to write a phased plan with subtasks on `refactor/plan-<date>` on the **target** repo (`plan.md`, `phases/`, `plan.json`) and opens a PR there. In a terminal, pick that legacy branch from the remote list (default: saved or newest `refactor/analyze-*`). Or pass `--analyze-branch`. |
 | **Implement** | Needs Analyze and Plan. Unattended: implement each undone phase, check it off, test, then next. After the last phase, uses computer use to record a walkthrough (`docs/refactor/walkthrough.mp4`). |
 
 Agent IDs and branch names are stored in gitignored `.refactor/state.json`.
@@ -42,6 +42,7 @@ Optional flags still override `.env`:
 | `--modern-ref` / `CURSOR_MODERN_REF` | `main` | Modern starting branch or SHA |
 | `--model` / `CURSOR_MODEL` | `composer-2.5` | Model id |
 | `--prompt` / `CURSOR_PLAN_PROMPT` | prompted | Plan-only modernization ask (not written to `.env`) |
+| `--analyze-branch` | picker / state | Legacy branch Plan reads (skips the picker) |
 | `CURSOR_API_KEY` | prompted / `.env` | User or service-account API key |
 
 `CURSOR_REPO` is still accepted as an alias for the legacy source.

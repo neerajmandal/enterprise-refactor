@@ -6,9 +6,10 @@ import os
 import re
 import sys
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
+from typing import Any
 
 from cursor_sdk import (
     Agent,
@@ -229,6 +230,164 @@ def wait_for_cloud_run(run: object) -> RunResult:
     return last
 
 
+_DETAIL_LIMIT = 160
+
+
+def _one_line(value: object, limit: int = _DETAIL_LIMIT) -> str:
+    text = " ".join(str(value).split())
+    if len(text) > limit:
+        return text[: limit - 1] + "…"
+    return text
+
+
+def _tool_detail(args: object) -> str:
+    if args is None:
+        return ""
+    if isinstance(args, str):
+        return _one_line(args)
+    if isinstance(args, Mapping):
+        for key in (
+            "command",
+            "path",
+            "file_path",
+            "pattern",
+            "query",
+            "url",
+            "glob",
+            "target_directory",
+        ):
+            found = args.get(key)
+            if found:
+                return _one_line(found)
+        for found in args.values():
+            if isinstance(found, str) and found.strip():
+                return _one_line(found)
+    return _one_line(args)
+
+
+def _field(message: object, name: str, default: Any = "") -> Any:
+    if isinstance(message, Mapping):
+        return message.get(name, default)
+    return getattr(message, name, default)
+
+
+def _write_label(label: str, text: str) -> None:
+    print(f"{label:<6} {text}".rstrip(), flush=True)
+
+
+def _break_from_text(last_kind: str) -> None:
+    if last_kind == "assistant":
+        print("", flush=True)
+
+
+def _assistant_texts(message: object) -> list[str]:
+    inner = _field(message, "message", None)
+    content = _field(inner, "content", ()) if inner is not None else ()
+    texts: list[str] = []
+    for block in content or ():
+        text = _field(block, "text", "")
+        if text:
+            texts.append(str(text))
+    return texts
+
+
+def write_live_feed(messages: Iterator[Any]) -> bool:
+    """Print thinking, tools, tasks, status, usage, and assistant text."""
+    last_kind = ""
+    streamed = False
+    for message in messages:
+        kind = str(_field(message, "type", "") or "")
+        if kind == "assistant":
+            texts = _assistant_texts(message)
+            if not texts:
+                continue
+            if last_kind and last_kind != "assistant":
+                print("", flush=True)
+            for text in texts:
+                sys.stdout.write(text)
+                sys.stdout.flush()
+            last_kind = "assistant"
+            streamed = True
+            continue
+        if kind == "thinking":
+            text = _field(message, "text", "")
+            if not text:
+                continue
+            _break_from_text(last_kind)
+            duration = _field(message, "thinking_duration_ms", None)
+            _write_label("think", f"{duration}ms" if duration else "")
+            for line in str(text).splitlines() or [""]:
+                print(f"       {line}", flush=True)
+            last_kind = "thinking"
+            streamed = True
+            continue
+        if kind == "tool_call":
+            _break_from_text(last_kind)
+            line = "  ".join(
+                part
+                for part in (
+                    str(_field(message, "name", "") or ""),
+                    str(_field(message, "status", "") or ""),
+                    _tool_detail(_field(message, "args", None)),
+                )
+                if part
+            )
+            _write_label("tool", line)
+            last_kind = "tool_call"
+            streamed = True
+            continue
+        if kind == "task":
+            _break_from_text(last_kind)
+            _write_label(
+                "task",
+                "  ".join(
+                    part
+                    for part in (
+                        str(_field(message, "status", "") or ""),
+                        _one_line(_field(message, "text", "")),
+                    )
+                    if part
+                ),
+            )
+            last_kind = "task"
+            streamed = True
+            continue
+        if kind == "status":
+            _break_from_text(last_kind)
+            _write_label(
+                "status",
+                "  ".join(
+                    part
+                    for part in (
+                        str(_field(message, "status", "") or ""),
+                        _one_line(_field(message, "message", "")),
+                    )
+                    if part
+                ),
+            )
+            last_kind = "status"
+            streamed = True
+            continue
+        if kind == "usage":
+            usage = _field(message, "usage", None)
+            if usage is None:
+                continue
+            _break_from_text(last_kind)
+            _write_label(
+                "usage",
+                (
+                    f"in={_field(usage, 'input_tokens', 0)}  "
+                    f"out={_field(usage, 'output_tokens', 0)}  "
+                    f"total={_field(usage, 'total_tokens', 0)}"
+                ),
+            )
+            last_kind = "usage"
+            streamed = True
+    if streamed:
+        print("", flush=True)
+    return streamed
+
+
 def send_and_stream(agent: Agent, prompt: str) -> RunResult:
     print(f"agent  {agent.agent_id}", flush=True)
     url = agent_url(agent.agent_id)
@@ -237,13 +396,7 @@ def send_and_stream(agent: Agent, prompt: str) -> RunResult:
     run = agent.send(prompt)
     print(f"run    {run.id}", flush=True)
     print("", flush=True)
-    streamed = False
-    for chunk in run.iter_text():
-        streamed = True
-        sys.stdout.write(chunk)
-        sys.stdout.flush()
-    if streamed:
-        print("", flush=True)
+    streamed = write_live_feed(run.messages())
     result = finish_cloud_run(run)
     if result.status != "finished" and _has_result_block(result.result or ""):
         result = RunResult(

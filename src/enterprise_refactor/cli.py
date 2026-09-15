@@ -66,6 +66,11 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Plan modernization ask (or CURSOR_PLAN_PROMPT; prompted if missing)",
     )
+    parser.add_argument(
+        "--analyze-branch",
+        default=None,
+        help="Legacy branch Plan should read (skips the branch picker)",
+    )
     args = parser.parse_args(argv)
 
     config = resolve_config(args)
@@ -77,7 +82,13 @@ def main(argv: list[str] | None = None) -> int:
         ready=config.ready,
     )
     if args.workflow:
-        return _run_workflow(args.workflow, config, load_state(), args.prompt)
+        return _run_workflow(
+            args.workflow,
+            config,
+            load_state(),
+            args.prompt,
+            args.analyze_branch,
+        )
 
     last = 0
     index = 0
@@ -86,18 +97,30 @@ def main(argv: list[str] | None = None) -> int:
         if workflow == "exit":
             return last
         print("", flush=True)
-        last = _run_workflow(workflow, config, load_state(), args.prompt)
+        last = _run_workflow(
+            workflow,
+            config,
+            load_state(),
+            args.prompt,
+            args.analyze_branch,
+        )
         print("", flush=True)
         index = {"analyze": 1, "plan": 2, "implement": 2}.get(workflow, 0)
 
 
 def _run_workflow(
-    workflow: str, config: Config, state: WorkflowState, prompt: str | None
+    workflow: str,
+    config: Config,
+    state: WorkflowState,
+    prompt: str | None,
+    analyze_branch: str | None,
 ) -> int:
     if workflow == "analyze":
         return analyze.run(config, state)
     if workflow == "plan":
-        return plan.run(config, state, prompt=prompt)
+        return plan.run(
+            config, state, prompt=prompt, analyze_branch=analyze_branch
+        )
     return implement.run(config, state)
 
 
