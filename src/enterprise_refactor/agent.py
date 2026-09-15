@@ -27,6 +27,7 @@ class ParsedResult:
     legacy_branch: str = ""
     modern_branch: str = ""
     artifacts: str = ""
+    pr_url: str = ""
 
 
 class RunFailed(Exception):
@@ -43,7 +44,11 @@ def normalize_repo(url: str) -> str:
 
 
 def cloud_options(
-    config: Config, *, legacy_ref: str, modern_ref: str
+    config: Config,
+    *,
+    legacy_ref: str,
+    modern_ref: str,
+    auto_create_pr: bool = False,
 ) -> CloudAgentOptions:
     return CloudAgentOptions(
         env=CloudEnvironment(type="cloud", name=config.cursor_env),
@@ -52,18 +57,28 @@ def cloud_options(
             CloudRepository(url=config.modern_repo, starting_ref=modern_ref),
         ],
         skip_reviewer_request=True,
-        auto_create_pr=False,
+        auto_create_pr=auto_create_pr,
     )
 
 
 def create_cloud_agent(
-    config: Config, *, name: str, legacy_ref: str, modern_ref: str
+    config: Config,
+    *,
+    name: str,
+    legacy_ref: str,
+    modern_ref: str,
+    auto_create_pr: bool = False,
 ) -> Agent:
     return Agent.create(
         model=config.model,
         api_key=config.api_key,
         name=name,
-        cloud=cloud_options(config, legacy_ref=legacy_ref, modern_ref=modern_ref),
+        cloud=cloud_options(
+            config,
+            legacy_ref=legacy_ref,
+            modern_ref=modern_ref,
+            auto_create_pr=auto_create_pr,
+        ),
     )
 
 
@@ -114,7 +129,18 @@ def parse_result_block(text: str) -> ParsedResult:
             parsed.modern_branch = value
         elif key == "artifacts":
             parsed.artifacts = value
+        elif key in {"pr_url", "pr"}:
+            parsed.pr_url = value
     return parsed
+
+
+def pr_url_for_repo(result: RunResult, repo_url: str) -> str:
+    wanted = normalize_repo(repo_url)
+    if result.git:
+        for item in result.git.branches:
+            if normalize_repo(item.repo_url) == wanted and item.pr_url:
+                return item.pr_url
+    return ""
 
 
 def parsed_from_run(result: RunResult, config: Config) -> ParsedResult:
@@ -125,5 +151,6 @@ def parsed_from_run(result: RunResult, config: Config) -> ParsedResult:
         modern_branch=branch_for_repo(result, config.modern_repo)
         or block.modern_branch,
         artifacts=block.artifacts,
+        pr_url=pr_url_for_repo(result, config.modern_repo) or block.pr_url,
     )
 

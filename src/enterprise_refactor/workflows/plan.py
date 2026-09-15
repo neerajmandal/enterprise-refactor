@@ -42,13 +42,13 @@ The cloud environment already has both repositories checked out:
 
 Operational steps (do these around the planning work below):
 
-1. Create and push a branch on the TARGET repo named `refactor/plan-{stamp}` (or continue on the branch this cloud run already opened if it is a refactor/plan-* branch). Do not open a pull request.
+1. Create and push a branch on the TARGET repo named `refactor/plan-{stamp}` (or continue on the branch this cloud run already opened if it is a refactor/plan-* branch).
 2. Do not modify application code on either repo. Planning artifacts only.
 3. Commit on the TARGET branch:
    - `docs/refactor/plan.md`
    - `docs/refactor/phases/NN-<slug>.md` one file per phase
    - `docs/refactor/plan.json`
-4. Push the target branch.
+4. Push the target branch and open a pull request on the TARGET repo only. Do not open a PR on the LEGACY repo.
 
 You are performing the planning phase of a
 legacy-system modernization.
@@ -139,6 +139,7 @@ When finished, end your last message with exactly this block (fill in real value
 legacy_branch: {state.analyze_branch}
 modern_branch: <branch you pushed on the target repo>
 artifacts: docs/refactor/plan.md, docs/refactor/plan.json
+pr_url: <target repo pull request URL>
 ===END_REFACTOR_RESULT===
 """
 
@@ -162,6 +163,7 @@ def run(
             name=f"Plan {stamp}",
             legacy_ref=state.analyze_branch,
             modern_ref=config.modern_ref,
+            auto_create_pr=True,
         ) as agent:
             state.plan_agent_id = agent.agent_id
             save_state(state)
@@ -187,4 +189,6 @@ def run(
     print(f"plan branch  {state.plan_branch}", flush=True)
     if parsed.artifacts:
         print(f"artifacts    {parsed.artifacts}", flush=True)
+    if parsed.pr_url:
+        print(f"plan pr      {parsed.pr_url}", flush=True)
     return 0
