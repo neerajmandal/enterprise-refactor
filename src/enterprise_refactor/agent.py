@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from cursor_sdk import (
     Agent,
     CloudAgentOptions,
-    CloudEnvironment,
     CloudRepository,
     RunResult,
 )
@@ -51,7 +50,6 @@ def cloud_options(
     auto_create_pr: bool = False,
 ) -> CloudAgentOptions:
     return CloudAgentOptions(
-        env=CloudEnvironment(type="cloud", name=config.cursor_env),
         repos=[
             CloudRepository(url=config.legacy_repo, starting_ref=legacy_ref),
             CloudRepository(url=config.modern_repo, starting_ref=modern_ref),
@@ -59,6 +57,12 @@ def cloud_options(
         skip_reviewer_request=True,
         auto_create_pr=auto_create_pr,
     )
+
+
+def agent_url(agent_id: str) -> str:
+    if (agent_id or "").startswith("bc-"):
+        return f"https://cursor.com/agents/{agent_id}"
+    return ""
 
 
 def create_cloud_agent(
@@ -83,8 +87,11 @@ def create_cloud_agent(
 
 
 def send_and_stream(agent: Agent, prompt: str) -> RunResult:
-    run = agent.send(prompt)
     print(f"agent  {agent.agent_id}", flush=True)
+    url = agent_url(agent.agent_id)
+    if url:
+        print(f"url    {url}", flush=True)
+    run = agent.send(prompt)
     print(f"run    {run.id}", flush=True)
     print("", flush=True)
     streamed = False
