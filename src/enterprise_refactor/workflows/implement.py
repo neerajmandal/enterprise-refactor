@@ -19,10 +19,11 @@ from enterprise_refactor.state import WorkflowState, save_state
 def _implement_prompt(config: Config, state: WorkflowState) -> str:
     return f"""You are running the Implement workflow of an enterprise refactor.
 
-The cloud environment already has both repositories checked out:
+The cloud environment has both repositories. Check out the remote branches
+before you edit (the VM may still be on main):
 
-- LEGACY: {config.legacy_repo} at {state.analyze_branch}
-- TARGET: {config.modern_repo} at {state.plan_branch}
+- LEGACY: {config.legacy_repo} — `git fetch origin` and check out `{state.analyze_branch}`
+- TARGET: {config.modern_repo} — `git fetch origin` and check out `{state.plan_branch}`
 
 Work on the TARGET branch. Do not wait for a human. There is no CLI confirmation between phases.
 

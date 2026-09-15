@@ -13,6 +13,8 @@ from enterprise_refactor.config import (
     resolve_config,
 )
 from enterprise_refactor.menu import choose_phase
+from enterprise_refactor.runs import show_runs
+from enterprise_refactor.settings import edit_settings
 from enterprise_refactor.state import WorkflowState, load_state
 from enterprise_refactor.workflows import analyze, implement, plan
 
@@ -93,10 +95,22 @@ def main(argv: list[str] | None = None) -> int:
     last = 0
     index = 0
     while True:
-        workflow = choose_phase(index)
-        if workflow == "exit":
-            return last
+        workflow = choose_phase(
+            legacy_repo=config.legacy_repo,
+            modern_repo=config.modern_repo,
+            cursor_env=config.cursor_env,
+            model=config.model,
+            index=index,
+        )
         print("", flush=True)
+        if workflow == "settings":
+            edit_settings(config)
+            index = 4
+            continue
+        if workflow == "runs":
+            show_runs(config, load_state())
+            index = 3
+            continue
         last = _run_workflow(
             workflow,
             config,

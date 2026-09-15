@@ -2,7 +2,7 @@
 
 CLI that prompts for a **legacy repo**, **target repo**, and **Cursor env**, then runs one of three Cursor Cloud Agent workflows. Both repos are always cloned into that env.
 
-On start it draws a green **REFACTOR AGENT** splash, then an arrow-key menu: **↑↓** to move between Analyze, Plan, and Implement, **enter** to run. Change the model with `--model` or `CURSOR_MODEL` in `.env`.
+On start it draws a green **REFACTOR** home screen with the connected env, model, and repos, then an arrow-key menu: **↑↓** to move between Analyze, Plan, Implement, Runs, and Settings, **enter** to run, **q** to quit. Change the model with `--model` or `CURSOR_MODEL` in `.env`. **Settings** can override repos and the API key for the current process only; it does not write `.env`. **Runs** shows the last agent IDs and branch names from `.refactor/state.json`.
 
 ## Setup
 
@@ -26,7 +26,7 @@ uv run enterprise-refactor implement
 | Workflow | What it does |
 | --- | --- |
 | **Analyze** | Discovery-only map of the legacy system (target repo is context). Pushes `refactor/analyze-<date>` on the **legacy** repo with `docs/modernization/CURRENT_STATE_ANALYSIS.md` and `docs/modernization/current-state.md`. |
-| **Plan** | Asks for a modernization prompt (`--prompt` / `CURSOR_PLAN_PROMPT`), then uses current-state docs on a **legacy** branch to write a phased plan with subtasks on `refactor/plan-<date>` on the **target** repo (`plan.md`, `phases/`, `plan.json`) and opens a PR there. In a terminal, pick that legacy branch from the remote list (default: saved or newest `refactor/analyze-*`). Or pass `--analyze-branch`. |
+| **Plan** | Asks for a modernization prompt (`--prompt` / `CURSOR_PLAN_PROMPT`), then lists remote heads on the **legacy** repo (`git ls-remote`, then `gh`). The picker puts `refactor/analyze-*` first and defaults to the newest of those. The cloud agent fetches and checks out that remote branch before reading current-state docs, then writes a phased plan on `refactor/plan-<date>` on the **target** repo and opens a PR there. Or pass `--analyze-branch`. |
 | **Implement** | Needs Analyze and Plan. Unattended: implement each undone phase, check it off, test, then next. After the last phase, uses computer use to record a walkthrough (`docs/refactor/walkthrough.mp4`). |
 
 Agent IDs and branch names are stored in gitignored `.refactor/state.json`.
@@ -42,6 +42,7 @@ Optional flags still override `.env`:
 | `--modern-ref` / `CURSOR_MODERN_REF` | `main` | Modern starting branch or SHA |
 | `--model` / `CURSOR_MODEL` | `composer-2.5` | Model id |
 | `--prompt` / `CURSOR_PLAN_PROMPT` | prompted | Plan-only modernization ask (not written to `.env`) |
+| **Settings** (menu) | session | Override repos and API key until you quit; never writes `.env` |
 | `--analyze-branch` | picker / state | Legacy branch Plan reads (skips the picker) |
 | `CURSOR_API_KEY` | prompted / `.env` | User or service-account API key |
 

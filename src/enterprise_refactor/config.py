@@ -174,3 +174,17 @@ def resolve_config(args: argparse.Namespace) -> Config:
         cursor_env=cursor_env,
         ready=True,
     )
+
+
+def apply_session(config: Config) -> None:
+    """Use these values for the rest of this process. Do not write .env."""
+    os.environ["CURSOR_API_KEY"] = config.api_key
+    os.environ["CURSOR_LEGACY_REPO"] = config.legacy_repo
+    os.environ["CURSOR_MODERN_REPO"] = config.modern_repo
+    os.environ["CURSOR_LEGACY_REF"] = config.legacy_ref
+    os.environ["CURSOR_MODERN_REF"] = config.modern_ref
+    os.environ["CURSOR_MODEL"] = config.model
+    os.environ["CURSOR_ENV"] = config.cursor_env
+    config.ready = bool(
+        config.api_key and config.legacy_repo and config.modern_repo and config.cursor_env
+    )

@@ -1,4 +1,4 @@
-"""Green terminal art for the refactor agent splash."""
+"""Home-screen chrome: pixel title, connection meta, and menu frame."""
 
 from __future__ import annotations
 
@@ -13,17 +13,85 @@ GREEN = "\033[38;5;40m"
 LIME = "\033[38;5;46m"
 FOREST = "\033[38;5;34m"
 MOSS = "\033[38;5;65m"
-MINT = "\033[38;5;121m"
+MINT = "\033[38;5;151m"
 CYAN = "\033[38;5;81m"
 AMBER = "\033[38;5;214m"
 WHITE = "\033[38;5;255m"
+DIM = "\033[38;5;245m"
+MUTED = "\033[38;5;240m"
+RULE = "\033[38;5;236m"
+SELECT_FG = "\033[38;5;193m"
+SELECT_BG = "\033[48;5;22m"
+KEY_BG = "\033[48;5;236m"
 ANSI = re.compile(r"\033\[[0-9;]*m|\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b.")
 
-TITLE = [
-    r"  ╦═╗╔═╗╔═╗╔═╗╔═╗╔╦╗╔═╗╦═╗   ╔═╗╔═╗╔═╗╔╗╔╔╦╗",
-    r"  ╠╦╝║╣ ╠╣ ╠═╣║   ║ ║ ║╠╦╝   ╠═╣║ ╦║╣ ║║║ ║ ",
-    r"  ╩╚═╚═╝╚  ╩ ╩╚═╝ ╩ ╚═╝╩╚═   ╩ ╩╚═╝╚═╝╝╚╝ ╩ ",
-]
+VERSION = "v0.1.0"
+TAGLINE_TOP = "Modernize with confidence."
+TAGLINE_BOTTOM = "One step at a time."
+FOOTER_HOME: tuple[tuple[str, str], ...] = (
+    ("↑↓", "navigate"),
+    ("enter", "select"),
+    ("q", "quit"),
+)
+FOOTER_PAGE: tuple[tuple[str, str], ...] = (
+    ("↑↓", "navigate"),
+    ("enter", "select"),
+    ("esc", "back"),
+    ("q", "quit"),
+)
+
+# 5-row pixel glyphs. Last column is the letter gap.
+_GLYPHS: dict[str, tuple[str, str, str, str, str]] = {
+    "R": (
+        "████ ",
+        "█  █ ",
+        "████ ",
+        "█ █  ",
+        "█  █ ",
+    ),
+    "E": (
+        "████ ",
+        "█    ",
+        "███  ",
+        "█    ",
+        "████ ",
+    ),
+    "F": (
+        "████ ",
+        "█    ",
+        "███  ",
+        "█    ",
+        "█    ",
+    ),
+    "A": (
+        " ██  ",
+        "█  █ ",
+        "████ ",
+        "█  █ ",
+        "█  █ ",
+    ),
+    "C": (
+        " ███ ",
+        "█    ",
+        "█    ",
+        "█    ",
+        " ███ ",
+    ),
+    "T": (
+        "████ ",
+        "  █  ",
+        "  █  ",
+        "  █  ",
+        "  █  ",
+    ),
+    "O": (
+        " ██  ",
+        "█  █ ",
+        "█  █ ",
+        "█  █ ",
+        " ██  ",
+    ),
+}
 
 
 def _color_enabled() -> bool:
@@ -44,9 +112,9 @@ def _visible_len(text: str) -> int:
     return len(ANSI.sub("", text))
 
 
-def _center_line(line: str, width: int) -> str:
-    pad = max(0, width - _visible_len(line))
-    return " " * (pad // 2) + line
+def term_size() -> tuple[int, int]:
+    size = shutil.get_terminal_size((100, 32))
+    return max(72, size.columns), max(24, size.lines)
 
 
 def repo_label(url: str) -> str:
@@ -69,37 +137,144 @@ def repo_label(url: str) -> str:
     return parts[0] if parts else raw
 
 
-def _box(title: str, detail: str, width: int, *, missing: bool = False) -> list[str]:
-    inner = width - 2
-    status = " ○ missing" if missing else ""
+def _pixel_word(word: str) -> list[str]:
+    rows = [""] * 5
+    for ch in word.upper():
+        glyph = _GLYPHS.get(ch)
+        if glyph is None:
+            continue
+        for i, piece in enumerate(glyph):
+            rows[i] += piece + " "
+    return [row.rstrip() for row in rows]
+
+
+def _join_ends(left: str, right: str, width: int) -> str:
+    gap = width - _visible_len(left) - _visible_len(right)
+    if gap < 1:
+        return left[:width]
+    return left + " " * gap + right
+
+
+def _rule(width: int) -> str:
+    return _c(RULE, "─" * width)
+
+
+def _meta_row(label: str, value: str, width: int) -> str:
+    label_w = 16
+    left = f"  {_c(DIM, label.ljust(label_w))}"
+    right = _c(WHITE, value)
+    line = left + right
+    pad = max(0, width - _visible_len(line))
+    return line + " " * pad
+
+
+def header_lines(
+    *,
+    width: int,
+    legacy_repo: str,
+    modern_repo: str,
+    cursor_env: str,
+    model: str,
+) -> list[str]:
+    env_name = cursor_env.strip() or "(unset)"
+    model_name = model.strip() or "(unset)"
+    source = repo_label(legacy_repo) if legacy_repo.strip() else "(not connected)"
+    target = repo_label(modern_repo) if modern_repo.strip() else "(not connected)"
+
+    title = _pixel_word("REFACTOR")
+    col_w = max(len(VERSION), len(TAGLINE_TOP), len(TAGLINE_BOTTOM))
+    right = [
+        _c(DIM, VERSION.ljust(col_w)),
+        "",
+        _c(DIM, TAGLINE_TOP.ljust(col_w)),
+        _c(DIM, TAGLINE_BOTTOM.ljust(col_w)),
+        "",
+    ]
+    title_block = [
+        _join_ends("  " + _c(LIME, title[i]), right[i] + "  ", width)
+        for i in range(5)
+    ]
+    subtitle = (
+        "  "
+        + _c(LIME, "analyze")
+        + _c(MUTED, "  →  ")
+        + _c(CYAN, "plan")
+        + _c(MUTED, "  →  ")
+        + _c(AMBER, "implement")
+    )
     return [
-        "┌" + "─" * inner + "┐",
-        "│" + f" {title}"[:inner].ljust(inner) + "│",
-        "│" + status[:inner].ljust(inner) + "│",
-        "│" + f" {detail}"[:inner].ljust(inner) + "│",
-        "└" + "─" * inner + "┘",
+        "",
+        *title_block,
+        "",
+        subtitle,
+        "",
+        _rule(width),
+        "",
+        _meta_row("Environment", env_name, width),
+        _meta_row("Model", model_name, width),
+        _meta_row("Source repo", source, width),
+        _meta_row("Target repo", target, width),
+        "",
+        _rule(width),
+        "",
     ]
 
 
-def _color_box(lines: list[str], code: str) -> list[str]:
-    return [_c(code, line) for line in lines]
+def footer_line(
+    width: int,
+    *,
+    actions: tuple[tuple[str, str], ...] = FOOTER_HOME,
+) -> str:
+    parts = [
+        f"{_c(KEY_BG + WHITE, f' {key} ')} {_c(DIM, label)}"
+        for key, label in actions
+    ]
+    left = "  " + "   ".join(parts)
+    return left + " " * max(0, width - _visible_len(left))
 
 
-def _fork(left_center: int, mid: int, right_center: int) -> list[str]:
-    """Env drops from mid, then splits to both repos."""
-    span = right_center - left_center
-    stem = " " * mid + "│"
-    bar = (
-        " " * left_center
-        + "┌"
-        + "─" * (mid - left_center - 1)
-        + "┴"
-        + "─" * (right_center - mid - 1)
-        + "┐"
-    )
-    drops = " " * left_center + "│" + " " * (span - 1) + "│"
-    arrows = " " * left_center + "▼" + " " * (span - 1) + "▼"
-    return [_c(LIME, stem), _c(LIME, bar), _c(LIME, drops), _c(LIME, arrows)]
+def paint_menu_row(
+    *,
+    number: str,
+    icon: str,
+    title: str,
+    detail: str,
+    width: int,
+    selected: bool,
+    title_col: int = 28,
+) -> str:
+    if number.strip():
+        left_plain = f"  {number}  {icon}  {title}"
+        painted_left = f"  {_c(MUTED, number)}  {_c(DIM, icon)}  {_c(WHITE, title)}"
+    else:
+        left_plain = f"  {icon}  {title}"
+        painted_left = f"  {_c(DIM, icon)}  {_c(WHITE, title)}"
+    left_plain += " " * max(1, title_col - _visible_len(left_plain))
+    painted_left += " " * max(1, title_col - _visible_len(painted_left))
+    body = f"{left_plain}{detail}"
+    pad = max(0, width - _visible_len(body))
+    body = body + " " * pad
+    if selected:
+        return _c(SELECT_BG + SELECT_FG, body)
+    painted = painted_left + _c(DIM, detail)
+    return painted + " " * max(0, width - _visible_len(painted))
+
+
+def frame_screen(
+    body: list[str],
+    *,
+    width: int,
+    height: int,
+    footer_actions: tuple[tuple[str, str], ...] = FOOTER_HOME,
+) -> str:
+    lines = list(body)
+    while len(lines) < height - 2:
+        lines.append("")
+    lines.append(_rule(width))
+    lines.append(footer_line(width, actions=footer_actions))
+    if len(lines) > height:
+        lines = lines[: height - 2] + lines[-2:]
+    return "\n".join(lines) + "\n"
 
 
 def render(
@@ -110,73 +285,89 @@ def render(
     model: str,
     ready: bool,
 ) -> str:
-    legacy_name = repo_label(legacy_repo)
-    modern_name = repo_label(modern_repo)
-    env_name = cursor_env.strip() or "inds-support-agent"
-    model_name = model.strip() or "(unset)"
-    env_missing = not bool(cursor_env.strip())
-    legacy_missing = not bool(legacy_repo.strip())
-    modern_missing = not bool(modern_repo.strip())
-    repo_w = 28
-    gap = 6
-    row_w = repo_w * 2 + gap
-    env_w = 32
-    left_center = repo_w // 2
-    right_center = repo_w + gap + repo_w // 2
-    mid = row_w // 2
-
-    env_box = [
-        _center_line(line, row_w)
-        for line in _color_box(
-            _box(
-                "CURSOR ENV",
-                env_name,
-                env_w,
-                missing=env_missing,
-            ),
-            LIME,
-        )
-    ]
-    legacy_box = _color_box(
-        _box(
-            "LEGACY SOURCE",
-            legacy_name,
-            repo_w,
-            missing=legacy_missing,
-        ),
-        FOREST,
+    width, height = term_size()
+    lines = header_lines(
+        width=width,
+        legacy_repo=legacy_repo,
+        modern_repo=modern_repo,
+        cursor_env=cursor_env,
+        model=model,
     )
-    modern_box = _color_box(
-        _box(
-            "MODERN TARGET",
-            modern_name,
-            repo_w,
-            missing=modern_missing,
-        ),
-        GREEN,
-    )
-    repos = [
-        left + " " * gap + right for left, right in zip(legacy_box, modern_box)
-    ]
-    lines = ["", *(_c(LIME, line) for line in TITLE), ""]
-    lines.append(_c(MINT, "           analyze · plan · implement"))
-    lines.append("")
-    lines.extend(env_box)
-    lines.extend(_fork(left_center, mid, right_center))
-    lines.extend(repos)
-    lines.append("")
-    lines.append(_center_line(_c(MINT, f"model  {model_name}"), row_w))
-    lines.append("")
     if ready:
-        lines.append(_c(LIME, "  status  CLI ready"))
+        lines.append(_c(MOSS, "  Use the menu to continue."))
     else:
-        lines.append(_c(MOSS, "  status  waiting for connection details"))
-    lines.append("")
-    return "\n".join(lines)
+        lines.append(_c(MOSS, "  Waiting for connection details."))
+    return frame_screen(lines, width=width, height=height)
+
+
+def render_home(
+    *,
+    legacy_repo: str,
+    modern_repo: str,
+    cursor_env: str,
+    model: str,
+    menu_rows: list[tuple[str, str, str, str]],
+    selected: int,
+) -> str:
+    width, height = term_size()
+    lines = header_lines(
+        width=width,
+        legacy_repo=legacy_repo,
+        modern_repo=modern_repo,
+        cursor_env=cursor_env,
+        model=model,
+    )
+    for i, (number, icon, title, detail) in enumerate(menu_rows):
+        lines.append(
+            paint_menu_row(
+                number=number,
+                icon=icon,
+                title=title,
+                detail=detail,
+                width=width,
+                selected=i == selected,
+            )
+        )
+    return frame_screen(lines, width=width, height=height)
+
+
+def render_page(
+    *,
+    legacy_repo: str,
+    modern_repo: str,
+    cursor_env: str,
+    model: str,
+    body: list[str],
+    footer_actions: tuple[tuple[str, str], ...] = FOOTER_PAGE,
+) -> str:
+    width, height = term_size()
+    lines = header_lines(
+        width=width,
+        legacy_repo=legacy_repo,
+        modern_repo=modern_repo,
+        cursor_env=cursor_env,
+        model=model,
+    )
+    lines.extend(body)
+    return frame_screen(
+        lines, width=width, height=height, footer_actions=footer_actions
+    )
+
+
+def clear_screen() -> None:
+    sys.stdout.write("\033[2J\033[H")
+    sys.stdout.flush()
+
+
+def print_screen(text: str) -> None:
+    clear_screen()
+    sys.stdout.write(text)
+    sys.stdout.flush()
 
 
 def print_banner(**kwargs: str | bool) -> None:
-    art = render(**kwargs)
-    shutil.get_terminal_size((100, 24))
-    sys.stdout.write(art)
-    sys.stdout.flush()
+    print_screen(render(**kwargs))
+
+
+def print_home(**kwargs: object) -> None:
+    print_screen(render_home(**kwargs))

@@ -36,20 +36,23 @@ def _prompt(
 ) -> str:
     return f"""You are running the Plan workflow of an enterprise refactor.
 
-The cloud environment already has both repositories checked out:
+The cloud environment has both repositories. You must put LEGACY on the
+selected remote analyze branch before you read current-state docs. Do not
+trust that the VM is already on that branch (it may be on main).
 
-- LEGACY (analysis): {config.legacy_repo} at {state.analyze_branch}
+- LEGACY (analysis): {config.legacy_repo} — required branch `{state.analyze_branch}`
 - TARGET (write the plan here): {config.modern_repo} at {config.modern_ref}
 
 Operational steps (do these around the planning work below):
 
-1. Create and push a branch on the TARGET repo named `refactor/plan-{stamp}` (or continue on the branch this cloud run already opened if it is a refactor/plan-* branch).
-2. Do not modify application code on either repo. Planning artifacts only.
-3. Commit on the TARGET branch:
+1. On the LEGACY repo: `git fetch origin` and check out the remote branch `{state.analyze_branch}` (`git checkout -B {state.analyze_branch} origin/{state.analyze_branch}`). If that ref is missing, fail — do not invent analysis, do not stay on main, and do not create a new `refactor/analyze-*` branch.
+2. Create and push a branch on the TARGET repo named `refactor/plan-{stamp}` (or continue on the branch this cloud run already opened if it is a refactor/plan-* branch).
+3. Do not modify application code on either repo. Planning artifacts only.
+4. Commit on the TARGET branch:
    - `docs/refactor/plan.md`
    - `docs/refactor/phases/NN-<slug>.md` one file per phase
    - `docs/refactor/plan.json`
-4. Push the target branch and open a pull request on the TARGET repo only. Do not open a PR on the LEGACY repo.
+5. Push the target branch and open a pull request on the TARGET repo only. Do not open a PR on the LEGACY repo.
 
 You are performing the planning phase of a
 legacy-system modernization.
@@ -152,9 +155,12 @@ def run(
     prompt: str | None = None,
     analyze_branch: str | None = None,
 ) -> int:
-    state.analyze_branch = resolve_legacy_plan_branch(
+    analyze_ref = resolve_legacy_plan_branch(
         config, state, analyze_branch=analyze_branch
     )
+    if not analyze_ref:
+        return 0
+    state.analyze_branch = analyze_ref
     save_state(state)
 
     modernization_ask = resolve_modernization_ask(prompt)

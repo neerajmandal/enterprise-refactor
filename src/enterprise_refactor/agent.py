@@ -14,10 +14,12 @@ from typing import Any
 from cursor_sdk import (
     Agent,
     CloudAgentOptions,
+    CloudEnvironment,
     CloudRepository,
     RunResult,
 )
 
+from enterprise_refactor.branches import remote_url
 from enterprise_refactor.config import Config
 
 _RESULT_BLOCK = re.compile(
@@ -54,10 +56,22 @@ def cloud_options(
     modern_ref: str,
     auto_create_pr: bool = False,
 ) -> CloudAgentOptions:
+    env = (
+        CloudEnvironment(name=config.cursor_env)
+        if config.cursor_env.strip()
+        else None
+    )
     return CloudAgentOptions(
+        env=env,
         repos=[
-            CloudRepository(url=config.legacy_repo, starting_ref=legacy_ref),
-            CloudRepository(url=config.modern_repo, starting_ref=modern_ref),
+            CloudRepository(
+                url=remote_url(config.legacy_repo),
+                starting_ref=legacy_ref,
+            ),
+            CloudRepository(
+                url=remote_url(config.modern_repo),
+                starting_ref=modern_ref,
+            ),
         ],
         skip_reviewer_request=True,
         auto_create_pr=auto_create_pr,
