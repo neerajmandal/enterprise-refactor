@@ -1,51 +1,101 @@
 # enterprise-refactor
 
-CLI that prompts for a **legacy repo**, **target repo**, and **Cursor env**, then runs one of three Cursor Cloud Agent workflows. Both repos are always cloned into that env.
-
-On start it draws a green **REFACTOR** home screen with the connected env, model, and repos, then an arrow-key menu: **↑↓** to move between Analyze, Plan, Implement, Runs, and Settings, **enter** to run, **q** to quit. Change the model with `--model` or `CURSOR_MODEL` in `.env`. **Settings** can override repos and the API key for the current process only; it does not write `.env`. **Runs** shows the last agent IDs and branch names from `.refactor/state.json`.
-
-## Setup
+Interactive CLI that drives three Cursor Cloud Agent workflows: **Analyze**, **Plan**, and **Implement**. Each run starts a cloud agent in a named Cursor environment with **both** git repos checked out (legacy source and modern target).
 
 ```bash
 uv sync
+uv run enterprise-refactor
 ```
 
-No flags or env vars are required to start. On first run the CLI prompts for anything missing (`CURSOR_API_KEY`, `CURSOR_LEGACY_REPO`, `CURSOR_MODERN_REPO`, `CURSOR_ENV`) and writes them to `.env`. Later runs load `.env` and show **CLI ready**.
+Create an API key at [Cursor Dashboard → Integrations](https://cursor.com/dashboard/integrations).
 
-Create a key at [Cursor Dashboard → Integrations](https://cursor.com/dashboard/integrations).
+## How the CLI starts
 
-## Usage
+1. Load `.env` if it exists (`os.environ.setdefault`, so a real env var wins).
+2. Resolve connection settings from flags, then env / `.env`:
+   - `CURSOR_API_KEY`
+   - `CURSOR_LEGACY_REPO` (or `CURSOR_REPO`)
+   - `CURSOR_MODERN_REPO`
+   - `CURSOR_ENV`
+3. If anything required is missing, draw the **REFACTOR** home screen in “waiting” mode and prompt for it. Valid repo values are a git URL or `owner/repo`. The API key is entered with a hidden prompt. Answers are written to `.env` (plus defaults for refs and model if those keys are new).
+4. Draw the home screen again with Environment, Model, Source repo, and Target repo, then either run a named workflow or open the menu.
+
+A TTY is required for prompts and the menu. Non-interactive use must pass `analyze`, `plan`, or `implement` and supply any missing values via flags or `.env`.
+
+## Home menu
 
 ```bash
 uv run enterprise-refactor
+```
+
+Full-screen TUI. **↑↓** or **j/k** move, **1–5** jump, **enter** selects, **q** quits. After a workflow finishes you return to the menu (highlight moves to the next typical step).
+
+| Item | What happens |
+| --- | --- |
+| **Analyze** | Discovery-only map of the legacy system. Target repo is context only. Cloud agent pushes `refactor/analyze-YYYYMMDD` on the **legacy** repo (no PR) with `docs/modernization/CURRENT_STATE_ANALYSIS.md` and `docs/modernization/current-state.md`. |
+| **Plan** | Pick which **legacy** remote branch to read, then enter a modernization prompt. Agent checks out that branch, writes a phased plan on `refactor/plan-YYYYMMDD` on the **target** repo (`docs/refactor/plan.md`, `docs/refactor/plan.json`, `docs/refactor/phases/NN-<slug>.md`), and opens a PR on the target only. |
+| **Implement** | Requires a saved analyze branch and plan branch. Two turns on one agent: implement every undone phase (check off, run `test_command`, push), then a computer-use walkthrough (`docs/refactor/walkthrough.mp4` + `walkthrough.md`, or screenshots under `docs/refactor/walkthrough/` if video is not possible). |
+| **Runs** | Read-only last agent IDs and branch names from `.refactor/state.json`. Enter or **q** returns. |
+| **Settings** | Session-only override of legacy repo, modern repo, or API key. Updates process env; **does not write `.env`**. Env name and model stay as started (use flags / `.env`). |
+
+Skip the menu:
+
+```bash
 uv run enterprise-refactor analyze
 uv run enterprise-refactor plan
 uv run enterprise-refactor implement
 ```
 
-| Workflow | What it does |
-| --- | --- |
-| **Analyze** | Discovery-only map of the legacy system (target repo is context). Pushes `refactor/analyze-<date>` on the **legacy** repo with `docs/modernization/CURRENT_STATE_ANALYSIS.md` and `docs/modernization/current-state.md`. |
-| **Plan** | Asks for a modernization prompt (`--prompt` / `CURSOR_PLAN_PROMPT`), then lists remote heads on the **legacy** repo (`git ls-remote`, then `gh`). The picker puts `refactor/analyze-*` first and defaults to the newest of those. The cloud agent fetches and checks out that remote branch before reading current-state docs, then writes a phased plan on `refactor/plan-<date>` on the **target** repo and opens a PR there. Or pass `--analyze-branch`. |
-| **Implement** | Needs Analyze and Plan. Unattended: implement each undone phase, check it off, test, then next. After the last phase, uses computer use to record a walkthrough (`docs/refactor/walkthrough.mp4`). |
+## Plan branch picker
 
-Agent IDs and branch names are stored in gitignored `.refactor/state.json`.
+Unless you pass `--analyze-branch`:
 
-Optional flags still override `.env`:
+1. List remote heads on the legacy repo (`git ls-remote --heads` and `gh api` if available; names are merged).
+2. Sort `refactor/analyze-*` first (newest date stamp first), then other branches.
+3. Default selection is the newest analyze branch, else last used from state, else `--legacy-ref` / `main`.
+4. **↑↓** / enter to choose, **esc** / Back to cancel (no agent).
+
+If remotes cannot be listed, the CLI asks for a branch name. Non-TTY Plan uses `--analyze-branch` or the branch already in `.refactor/state.json`.
+
+The modernization ask comes **after** the branch is chosen (`--prompt`, `CURSOR_PLAN_PROMPT`, or a prompt). That value is not written to `.env`.
+
+## What a cloud run does
+
+The CLI creates a Cursor Cloud Agent (`cursor-sdk`) with:
+
+- the selected `--model` / `CURSOR_MODEL` (default `composer-2.5`)
+- `CURSOR_ENV` as the named cloud environment
+- both repos as `CloudRepository` entries (`owner/repo` is expanded to `https://github.com/owner/repo.git`)
+- starting refs: Analyze uses `--legacy-ref` / `--modern-ref` (default `main`); Plan starts the legacy side on the chosen analyze branch; Implement starts on the saved analyze and plan branches
+
+While the agent works, the CLI streams thinking, tools, tasks, status, usage, and assistant text, then polls until the cloud run finishes (or fails). Agent IDs print as `https://cursor.com/agents/<id>` when they look like `bc-…`.
+
+Workflow IDs and branch names are stored in gitignored `.refactor/state.json`. Secrets stay in `.env`.
+
+## Flags and env
 
 | Flag / env | Default | Purpose |
 | --- | --- | --- |
-| `--legacy-repo` / `CURSOR_LEGACY_REPO` | prompted / `.env` | Legacy source git URL |
-| `--modern-repo` / `CURSOR_MODERN_REPO` | prompted / `.env` | Modern target git URL |
+| `--legacy-repo` / `CURSOR_LEGACY_REPO` | prompted / `.env` | Legacy source git URL or `owner/repo` |
+| `--modern-repo` / `CURSOR_MODERN_REPO` | prompted / `.env` | Modern target git URL or `owner/repo` |
 | `--cursor-env` / `CURSOR_ENV` | prompted / `.env` | Cursor cloud environment name |
-| `--legacy-ref` / `CURSOR_LEGACY_REF` | `main` | Legacy starting branch or SHA |
-| `--modern-ref` / `CURSOR_MODERN_REF` | `main` | Modern starting branch or SHA |
+| `--legacy-ref` / `CURSOR_LEGACY_REF` | `main` | Legacy starting branch or SHA (Analyze) |
+| `--modern-ref` / `CURSOR_MODERN_REF` | `main` | Target starting branch or SHA |
 | `--model` / `CURSOR_MODEL` | `composer-2.5` | Model id |
-| `--prompt` / `CURSOR_PLAN_PROMPT` | prompted | Plan-only modernization ask (not written to `.env`) |
-| **Settings** (menu) | session | Override repos and API key until you quit; never writes `.env` |
+| `--prompt` / `CURSOR_PLAN_PROMPT` | prompted | Plan modernization ask (not saved to `.env`) |
 | `--analyze-branch` | picker / state | Legacy branch Plan reads (skips the picker) |
 | `CURSOR_API_KEY` | prompted / `.env` | User or service-account API key |
 
-`CURSOR_REPO` is still accepted as an alias for the legacy source.
+`CURSOR_REPO` is accepted as an alias for the legacy source.
 
-Exit codes: `0` finished, `1` never started (auth/config/network or missing prior workflow), `2` run started then failed.
+## Exit codes
+
+Used when you pass `analyze`, `plan`, or `implement` on the command line:
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Workflow finished |
+| `1` | Never started (auth/config/network, or Implement without saved Analyze/Plan branches) |
+| `2` | Cloud run started, then failed |
+
+Quitting the home menu, or backing out of the Plan branch picker, exits `0`.
