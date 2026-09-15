@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import os
 import re
 import sys
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 
 from cursor_sdk import (
@@ -65,6 +69,47 @@ def agent_url(agent_id: str) -> str:
     return ""
 
 
+_ACTIVE_STATUSES = {"running", "creating"}
+_POLL_SECONDS = 5
+_POLL_TIMEOUT_SECONDS = 4 * 60 * 60
+_SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+_SPIN_INTERVAL = 0.1
+
+
+def _agent_api_key(agent: Agent) -> str | None:
+    return getattr(agent, "_api_key", None) or os.environ.get("CURSOR_API_KEY") or None
+
+
+def cloud_agent_has_active_run(agent: Agent) -> bool:
+    try:
+        page = Agent.list_runs(
+            agent.agent_id,
+            {
+                "api_key": _agent_api_key(agent),
+                "runtime": "cloud",
+            },
+        )
+    except Exception:
+        return True
+    for item in getattr(page, "items", ()):
+        status = getattr(item, "status", None)
+        if status in _ACTIVE_STATUSES or not status:
+            return True
+    return False
+
+
+def close_cloud_agent(agent: Agent) -> None:
+    if cloud_agent_has_active_run(agent):
+        url = agent_url(agent.agent_id) or agent.agent_id
+        print(f"leaving  cloud agent running  {url}", flush=True)
+        return
+    try:
+        agent.close()
+    except Exception:
+        return
+
+
+@contextmanager
 def create_cloud_agent(
     config: Config,
     *,
@@ -72,8 +117,8 @@ def create_cloud_agent(
     legacy_ref: str,
     modern_ref: str,
     auto_create_pr: bool = False,
-) -> Agent:
-    return Agent.create(
+) -> Iterator[Agent]:
+    agent = Agent.create(
         model=config.model,
         api_key=config.api_key,
         name=name,
@@ -84,6 +129,104 @@ def create_cloud_agent(
             auto_create_pr=auto_create_pr,
         ),
     )
+    try:
+        yield agent
+    finally:
+        close_cloud_agent(agent)
+
+
+def _as_run_result(run: object) -> RunResult:
+    return RunResult(
+        id=getattr(run, "id", ""),
+        agent_id=getattr(run, "agent_id", ""),
+        status=getattr(run, "status", "error"),
+        result=getattr(run, "result", "") or "",
+        model=getattr(run, "model", None),
+        duration_ms=getattr(run, "duration_ms", 0) or 0,
+        git=getattr(run, "git", None),
+        created_at=getattr(run, "created_at", None),
+        usage=getattr(run, "usage", None),
+    )
+
+
+def _has_result_block(text: str) -> bool:
+    parsed = parse_result_block(text)
+    return bool(
+        parsed.legacy_branch or parsed.modern_branch or parsed.pr_url or parsed.artifacts
+    )
+
+
+def fetch_run_snapshot(run: object) -> RunResult | None:
+    run_id = getattr(run, "id", "")
+    agent_id = getattr(run, "agent_id", "")
+    if not run_id:
+        return None
+    try:
+        snapshot = Agent.get_run(
+            run_id,
+            {
+                "api_key": getattr(run, "_api_key", None)
+                or os.environ.get("CURSOR_API_KEY")
+                or None,
+                "agent_id": agent_id,
+                "runtime": "cloud",
+            },
+        )
+    except Exception:
+        return None
+    return _as_run_result(snapshot)
+
+
+def recover_finished_run(run: object) -> RunResult | None:
+    """Cloud wait() can report error after the agent has already finished."""
+    snapshot = fetch_run_snapshot(run)
+    if snapshot is None or snapshot.status != "finished":
+        return None
+    return snapshot
+
+
+def _clear_spinner_line() -> None:
+    if sys.stdout.isatty():
+        sys.stdout.write("\r" + " " * 48 + "\r")
+        sys.stdout.flush()
+
+
+def finish_cloud_run(run: object) -> RunResult:
+    snapshot = fetch_run_snapshot(run)
+    if snapshot is not None and snapshot.status not in _ACTIVE_STATUSES and snapshot.status:
+        return snapshot
+    return wait_for_cloud_run(run)
+
+
+def wait_for_cloud_run(run: object) -> RunResult:
+    """Keep the CLI attached while the live feed ends before the cloud run does."""
+    deadline = time.monotonic() + _POLL_TIMEOUT_SECONDS
+    started = time.monotonic()
+    next_poll = started
+    last = fetch_run_snapshot(run)
+    frame = 0
+    try:
+        while last is None or last.status in _ACTIVE_STATUSES:
+            now = time.monotonic()
+            if now >= deadline:
+                break
+            if now >= next_poll:
+                last = fetch_run_snapshot(run)
+                next_poll = now + _POLL_SECONDS
+                if last is not None and last.status not in _ACTIVE_STATUSES:
+                    break
+            if sys.stdout.isatty():
+                mark = _SPINNER[frame % len(_SPINNER)]
+                elapsed = int(now - started)
+                sys.stdout.write(f"\r  {mark}  cloud run  {elapsed:>4}s")
+                sys.stdout.flush()
+                frame += 1
+            time.sleep(_SPIN_INTERVAL)
+    finally:
+        _clear_spinner_line()
+    if last is None:
+        raise RunFailed(getattr(run, "id", ""))
+    return last
 
 
 def send_and_stream(agent: Agent, prompt: str) -> RunResult:
@@ -99,13 +242,27 @@ def send_and_stream(agent: Agent, prompt: str) -> RunResult:
         streamed = True
         sys.stdout.write(chunk)
         sys.stdout.flush()
-    result = run.wait()
-    if result.status == "error":
+    if streamed:
+        print("", flush=True)
+    result = finish_cloud_run(run)
+    if result.status != "finished" and _has_result_block(result.result or ""):
+        result = RunResult(
+            id=result.id,
+            agent_id=result.agent_id,
+            status="finished",
+            result=result.result,
+            model=result.model,
+            duration_ms=result.duration_ms,
+            git=result.git,
+            created_at=result.created_at,
+            usage=result.usage,
+        )
+    if result.status != "finished":
+        if result.result:
+            print(result.result, flush=True)
         raise RunFailed(result.id)
     if result.result and not streamed:
         print(result.result, flush=True)
-    elif streamed:
-        print("", flush=True)
     return result
 
 
@@ -113,7 +270,12 @@ def branch_for_repo(result: RunResult, repo_url: str) -> str:
     wanted = normalize_repo(repo_url)
     if result.git:
         for item in result.git.branches:
-            if normalize_repo(item.repo_url) == wanted and item.branch:
+            if not item.branch:
+                continue
+            pr_url = item.pr_url or ""
+            if pr_url and wanted in normalize_repo(pr_url):
+                return item.branch
+            if normalize_repo(item.repo_url) == wanted:
                 return item.branch
     return ""
 
@@ -145,8 +307,11 @@ def pr_url_for_repo(result: RunResult, repo_url: str) -> str:
     wanted = normalize_repo(repo_url)
     if result.git:
         for item in result.git.branches:
-            if normalize_repo(item.repo_url) == wanted and item.pr_url:
-                return item.pr_url
+            pr_url = item.pr_url or ""
+            if pr_url and wanted in normalize_repo(pr_url):
+                return pr_url
+            if normalize_repo(item.repo_url) == wanted and pr_url:
+                return pr_url
     return ""
 
 

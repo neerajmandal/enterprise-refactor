@@ -9,10 +9,11 @@ from enterprise_refactor.config import (
     DEFAULT_ENV,
     DEFAULT_MODEL,
     DEFAULT_REF,
+    Config,
     resolve_config,
 )
 from enterprise_refactor.menu import choose_phase
-from enterprise_refactor.state import load_state
+from enterprise_refactor.state import WorkflowState, load_state
 from enterprise_refactor.workflows import analyze, implement, plan
 
 
@@ -75,15 +76,28 @@ def main(argv: list[str] | None = None) -> int:
         model=config.model,
         ready=config.ready,
     )
-    workflow = args.workflow or choose_phase()
-    state = load_state()
+    if args.workflow:
+        return _run_workflow(args.workflow, config, load_state(), args.prompt)
 
-    if workflow == "exit":
-        return 0
+    last = 0
+    index = 0
+    while True:
+        workflow = choose_phase(index)
+        if workflow == "exit":
+            return last
+        print("", flush=True)
+        last = _run_workflow(workflow, config, load_state(), args.prompt)
+        print("", flush=True)
+        index = {"analyze": 1, "plan": 2, "implement": 2}.get(workflow, 0)
+
+
+def _run_workflow(
+    workflow: str, config: Config, state: WorkflowState, prompt: str | None
+) -> int:
     if workflow == "analyze":
         return analyze.run(config, state)
     if workflow == "plan":
-        return plan.run(config, state, prompt=args.prompt)
+        return plan.run(config, state, prompt=prompt)
     return implement.run(config, state)
 
 

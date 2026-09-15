@@ -12,7 +12,7 @@ PHASES: tuple[tuple[str, str, str, str], ...] = (
     ("analyze", "Analyze", "branch the legacy repo and map the system", LIME),
     ("plan", "Plan", "ask for a goal, then write phased subtask plans", CYAN),
     ("implement", "Implement", "run every phase unattended, then record a walkthrough", AMBER),
-    ("exit", "Exit", "leave without starting a workflow", MOSS),
+    ("exit", "Exit", "leave the CLI", MOSS),
 )
 
 
@@ -72,13 +72,13 @@ def _draw(index: int, *, first: bool) -> None:
     sys.stdout.flush()
 
 
-def choose_phase() -> str:
+def choose_phase(index: int = 0) -> str:
     if not sys.stdin.isatty() or not sys.stdout.isatty():
         raise SystemExit(
             "Pass analyze, plan, or implement when stdin is not a terminal."
         )
 
-    index = 0
+    index = index % len(PHASES)
     _hide_cursor()
     try:
         _draw(index, first=True)

@@ -163,7 +163,7 @@ def run(
             name=f"Plan {stamp}",
             legacy_ref=state.analyze_branch,
             modern_ref=config.modern_ref,
-            auto_create_pr=True,
+            auto_create_pr=False,
         ) as agent:
             state.plan_agent_id = agent.agent_id
             save_state(state)
