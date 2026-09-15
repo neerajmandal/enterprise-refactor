@@ -25,7 +25,7 @@ The cloud environment already has both repositories checked out:
 - LEGACY (analysis): {config.legacy_repo} at {state.analyze_branch}
 - TARGET (write the plan here): {config.modern_repo} at {config.modern_ref}
 
-Read `docs/refactor/analysis.md` (and any sibling analysis files) on the legacy branch.
+Read `docs/modernization/CURRENT_STATE_ANALYSIS.md` and `docs/modernization/current-state.md` on the legacy branch (also check `docs/refactor/analysis.md` if the newer files are missing).
 
 Do this:
 

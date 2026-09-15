@@ -25,7 +25,7 @@ uv run enterprise-refactor implement
 
 | Workflow | What it does |
 | --- | --- |
-| **Analyze** | Maps the legacy system (target repo is context). Pushes `refactor/analyze-<date>` on the **legacy** repo with `docs/refactor/analysis.md`. |
+| **Analyze** | Discovery-only map of the legacy system (target repo is context). Pushes `refactor/analyze-<date>` on the **legacy** repo with `docs/modernization/CURRENT_STATE_ANALYSIS.md` and `docs/modernization/current-state.md`. |
 | **Plan** | Needs Analyze. Writes a modular phase plan on `refactor/plan-<date>` on the **target** repo (`plan.md`, `phases/`, `plan.json`). |
 | **Implement** | Needs Analyze and Plan. Unattended: implement each undone phase, check it off, test, then next. After the last phase, uses computer use to record a walkthrough (`docs/refactor/walkthrough.mp4`). |
 
