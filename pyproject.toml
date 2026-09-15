@@ -1,0 +1,16 @@
+[project]
+name = "enterprise-refactor"
+version = "0.1.0"
+description = "One-shot CLI that sends a single prompt to a Cursor Cloud Agent"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "cursor-sdk",
+]
+
+[project.scripts]
+enterprise-refactor = "enterprise_refactor.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
