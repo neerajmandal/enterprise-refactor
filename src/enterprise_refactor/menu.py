@@ -10,7 +10,7 @@ from enterprise_refactor.banner import AMBER, CYAN, LIME, WHITE, _c
 
 PHASES: tuple[tuple[str, str, str, str], ...] = (
     ("analyze", "Analyze", "branch the legacy repo and map the system", LIME),
-    ("plan", "Plan", "write modular phase plans on a target-repo branch", CYAN),
+    ("plan", "Plan", "ask for a goal, then write phased subtask plans", CYAN),
     ("implement", "Implement", "run every phase unattended, then record a walkthrough", AMBER),
 )
 

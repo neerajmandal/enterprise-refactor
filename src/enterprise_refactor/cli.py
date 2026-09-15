@@ -60,6 +60,11 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help=f"Model id (default: {DEFAULT_MODEL}, or CURSOR_MODEL / .env)",
     )
+    parser.add_argument(
+        "--prompt",
+        default=None,
+        help="Plan modernization ask (or CURSOR_PLAN_PROMPT; prompted if missing)",
+    )
     args = parser.parse_args(argv)
 
     config = resolve_config(args)
@@ -76,7 +81,7 @@ def main(argv: list[str] | None = None) -> int:
     if workflow == "analyze":
         return analyze.run(config, state)
     if workflow == "plan":
-        return plan.run(config, state)
+        return plan.run(config, state, prompt=args.prompt)
     return implement.run(config, state)
 
 
