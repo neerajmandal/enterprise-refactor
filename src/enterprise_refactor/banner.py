@@ -69,12 +69,13 @@ def repo_label(url: str) -> str:
     return parts[0] if parts else raw
 
 
-def _box(title: str, status: str, detail: str, width: int) -> list[str]:
+def _box(title: str, detail: str, width: int, *, missing: bool = False) -> list[str]:
     inner = width - 2
+    status = " ○ missing" if missing else ""
     return [
         "┌" + "─" * inner + "┐",
         "│" + f" {title}"[:inner].ljust(inner) + "│",
-        "│" + f" {status}"[:inner].ljust(inner) + "│",
+        "│" + status[:inner].ljust(inner) + "│",
         "│" + f" {detail}"[:inner].ljust(inner) + "│",
         "└" + "─" * inner + "┘",
     ]
@@ -111,12 +112,11 @@ def render(
 ) -> str:
     legacy_name = repo_label(legacy_repo)
     modern_name = repo_label(modern_repo)
-    env_name = cursor_env.strip() or "Cursor Cloud"
+    env_name = cursor_env.strip() or "inds-support-agent"
     model_name = model.strip() or "(unset)"
-    legacy_ok = bool(legacy_repo.strip())
-    modern_ok = bool(modern_repo.strip())
-    env_ok = bool(env_name)
-
+    env_missing = not bool(cursor_env.strip())
+    legacy_missing = not bool(legacy_repo.strip())
+    modern_missing = not bool(modern_repo.strip())
     repo_w = 28
     gap = 6
     row_w = repo_w * 2 + gap
@@ -130,9 +130,9 @@ def render(
         for line in _color_box(
             _box(
                 "CURSOR ENV",
-                "● connected" if env_ok else "○ missing",
                 env_name,
                 env_w,
+                missing=env_missing,
             ),
             LIME,
         )
@@ -140,18 +140,18 @@ def render(
     legacy_box = _color_box(
         _box(
             "LEGACY SOURCE",
-            "● connected" if legacy_ok else "○ missing",
             legacy_name,
             repo_w,
+            missing=legacy_missing,
         ),
         FOREST,
     )
     modern_box = _color_box(
         _box(
             "MODERN TARGET",
-            "● connected" if modern_ok else "○ missing",
             modern_name,
             repo_w,
+            missing=modern_missing,
         ),
         GREEN,
     )

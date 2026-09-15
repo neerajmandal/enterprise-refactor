@@ -78,6 +78,8 @@ def main(argv: list[str] | None = None) -> int:
     workflow = args.workflow or choose_phase()
     state = load_state()
 
+    if workflow == "exit":
+        return 0
     if workflow == "analyze":
         return analyze.run(config, state)
     if workflow == "plan":

@@ -6,12 +6,13 @@ import sys
 import termios
 import tty
 
-from enterprise_refactor.banner import AMBER, CYAN, LIME, WHITE, _c
+from enterprise_refactor.banner import AMBER, CYAN, LIME, MOSS, WHITE, _c
 
 PHASES: tuple[tuple[str, str, str, str], ...] = (
     ("analyze", "Analyze", "branch the legacy repo and map the system", LIME),
     ("plan", "Plan", "ask for a goal, then write phased subtask plans", CYAN),
     ("implement", "Implement", "run every phase unattended, then record a walkthrough", AMBER),
+    ("exit", "Exit", "leave without starting a workflow", MOSS),
 )
 
 
@@ -37,7 +38,7 @@ def _read_key() -> str:
             return "enter"
         if first in {"q", "Q"}:
             return "quit"
-        if first in {"1", "2", "3"}:
+        if first in {str(i) for i in range(1, len(PHASES) + 1)}:
             return first
         if first in {"k", "K"}:
             return "up"

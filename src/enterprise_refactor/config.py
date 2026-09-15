@@ -15,7 +15,7 @@ from enterprise_refactor.banner import print_banner
 ENV_PATH = Path(".env")
 DEFAULT_REF = "main"
 DEFAULT_MODEL = "composer-2.5"
-DEFAULT_ENV = "Cursor Cloud"
+DEFAULT_ENV = "inds-support-agent"
 
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b.|[\x00-\x08\x0b\x0c\x0e-\x1f]")
 
