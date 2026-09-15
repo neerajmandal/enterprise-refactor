@@ -1,7 +1,7 @@
 [project]
 name = "enterprise-refactor"
 version = "0.1.0"
-description = "One-shot CLI that sends a single prompt to a Cursor Cloud Agent"
+description = "CLI that runs Analyze, Plan, and Implement Cursor Cloud Agent workflows"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

@@ -1,8 +1,8 @@
 # enterprise-refactor
 
-CLI that makes **one** Cursor Cloud Agent call via `Agent.prompt()` and prints the result.
+CLI that prompts for a **legacy repo**, **target repo**, and **Cursor env**, then runs one of three Cursor Cloud Agent workflows. Both repos are always cloned into that env.
 
-On start it draws a green **REFACTOR AGENT** splash: Cursor env on top pointing at both repos, with the model as a single line below. Change the model with `--model` or `CURSOR_MODEL` in `.env`.
+On start it draws a green **REFACTOR AGENT** splash, then an arrow-key menu: **↑↓** to move between Analyze, Plan, and Implement, **enter** to run. Change the model with `--model` or `CURSOR_MODEL` in `.env`.
 
 ## Setup
 
@@ -10,7 +10,7 @@ On start it draws a green **REFACTOR AGENT** splash: Cursor env on top pointing 
 uv sync
 ```
 
-No flags or env vars are required to start. On first run the CLI prompts for anything missing (`CURSOR_API_KEY`, `CURSOR_LEGACY_REPO`, `CURSOR_MODERN_REPO`) and writes them to `.env`. Later runs load `.env` and show **CLI ready**.
+No flags or env vars are required to start. On first run the CLI prompts for anything missing (`CURSOR_API_KEY`, `CURSOR_LEGACY_REPO`, `CURSOR_MODERN_REPO`, `CURSOR_ENV`) and writes them to `.env`. Later runs load `.env` and show **CLI ready**.
 
 Create a key at [Cursor Dashboard → Integrations](https://cursor.com/dashboard/integrations).
 
@@ -18,8 +18,18 @@ Create a key at [Cursor Dashboard → Integrations](https://cursor.com/dashboard
 
 ```bash
 uv run enterprise-refactor
-uv run enterprise-refactor "Map the legacy checkout flow onto the modern repo"
+uv run enterprise-refactor analyze
+uv run enterprise-refactor plan
+uv run enterprise-refactor implement
 ```
+
+| Workflow | What it does |
+| --- | --- |
+| **Analyze** | Maps the legacy system (target repo is context). Pushes `refactor/analyze-<date>` on the **legacy** repo with `docs/refactor/analysis.md`. |
+| **Plan** | Needs Analyze. Writes a modular phase plan on `refactor/plan-<date>` on the **target** repo (`plan.md`, `phases/`, `plan.json`). |
+| **Implement** | Needs Analyze and Plan. Unattended: implement each undone phase, check it off, test, then next. After the last phase, uses computer use to record a walkthrough (`docs/refactor/walkthrough.mp4`). |
+
+Agent IDs and branch names are stored in gitignored `.refactor/state.json`.
 
 Optional flags still override `.env`:
 
@@ -27,7 +37,7 @@ Optional flags still override `.env`:
 | --- | --- | --- |
 | `--legacy-repo` / `CURSOR_LEGACY_REPO` | prompted / `.env` | Legacy source git URL |
 | `--modern-repo` / `CURSOR_MODERN_REPO` | prompted / `.env` | Modern target git URL |
-| `--cursor-env` / `CURSOR_ENV` | `Cursor Cloud` | Connected Cursor environment label |
+| `--cursor-env` / `CURSOR_ENV` | prompted / `.env` | Cursor cloud environment name |
 | `--legacy-ref` / `CURSOR_LEGACY_REF` | `main` | Legacy starting branch or SHA |
 | `--modern-ref` / `CURSOR_MODERN_REF` | `main` | Modern starting branch or SHA |
 | `--model` / `CURSOR_MODEL` | `composer-2.5` | Model id |
@@ -35,4 +45,4 @@ Optional flags still override `.env`:
 
 `CURSOR_REPO` is still accepted as an alias for the legacy source.
 
-Exit codes: `0` finished, `1` never started (auth/config/network), `2` run started then failed.
+Exit codes: `0` finished, `1` never started (auth/config/network or missing prior workflow), `2` run started then failed.

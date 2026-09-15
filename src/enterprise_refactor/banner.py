@@ -14,6 +14,9 @@ LIME = "\033[38;5;46m"
 FOREST = "\033[38;5;34m"
 MOSS = "\033[38;5;65m"
 MINT = "\033[38;5;121m"
+CYAN = "\033[38;5;81m"
+AMBER = "\033[38;5;214m"
+WHITE = "\033[38;5;255m"
 ANSI = re.compile(r"\033\[[0-9;]*m|\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b.")
 
 TITLE = [
@@ -156,7 +159,7 @@ def render(
         left + " " * gap + right for left, right in zip(legacy_box, modern_box)
     ]
     lines = ["", *(_c(LIME, line) for line in TITLE), ""]
-    lines.append(_c(MINT, "              one-shot cloud refactor agent"))
+    lines.append(_c(MINT, "           analyze · plan · implement"))
     lines.append("")
     lines.extend(env_box)
     lines.extend(_fork(left_center, mid, right_center))

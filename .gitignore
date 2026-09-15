@@ -5,4 +5,5 @@ __pycache__/
 dist/
 build/
 .env
+.refactor/
 .python-version

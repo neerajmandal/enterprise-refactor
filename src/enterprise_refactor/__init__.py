@@ -1,1 +1,1 @@
-"""One-shot Cursor Cloud Agent CLI."""
+"""Enterprise refactor CLI: Analyze, Plan, Implement via Cursor Cloud Agents."""
