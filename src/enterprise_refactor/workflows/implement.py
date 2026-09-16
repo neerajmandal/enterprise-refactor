@@ -52,13 +52,19 @@ artifacts: docs/refactor/plan.json
 def _video_prompt(config: Config, state: WorkflowState) -> str:
     return f"""The refactor phases are implemented on the TARGET repo ({config.modern_repo} at {state.plan_branch}).
 
-Now record a walkthrough. Do not wait for a human.
+Now record a walkthrough, then open a pull request that includes the video. Do not wait for a human.
 
 1. Start the app in this cloud VM (install/run as the target repo requires).
 2. Use computer use (desktop and browser) to walk the main user flows that the refactor covered.
-3. Record a screencast with ffmpeg/X11 or the equivalent available on this Debian/Ubuntu cloud desktop. Commit or upload it on the TARGET branch as `docs/refactor/walkthrough.mp4` plus a short `docs/refactor/walkthrough.md` note (what you clicked, what passed).
-4. Computer use works on dashboard/Dockerfile Debian–Ubuntu cloud environments. If this named Cursor env cannot record video, still complete the walkthrough with screenshots under `docs/refactor/walkthrough/`, explain the limitation in `walkthrough.md`, and push.
-5. Push the target branch. Do not open a pull request.
+3. Record a screencast with ffmpeg/X11 or the equivalent available on this Debian/Ubuntu cloud desktop. Commit it on the TARGET branch as `docs/refactor/walkthrough.mp4` plus a short `docs/refactor/walkthrough.md` note (what you clicked, what passed).
+4. Computer use works on dashboard/Dockerfile Debian–Ubuntu cloud environments. If this named Cursor env cannot record video, still complete the walkthrough with screenshots under `docs/refactor/walkthrough/`, explain the limitation in `walkthrough.md`, and commit those files.
+5. Push the target branch.
+6. Open a pull request on the TARGET repo only (base `{config.modern_ref}`). Do not open a PR on the LEGACY repo. If a PR for this branch already exists, update that one instead of opening a second.
+7. Put the walkthrough inside the PR:
+   - PR description must have a Walkthrough section that embeds or links the committed `docs/refactor/walkthrough.mp4` (raw or blob URL on this branch) so reviewers can play it from the PR.
+   - Also post a PR comment that embeds or links the same video (use `gh pr comment` if needed).
+   - If you only have screenshots, include them in the description and the comment.
+   - Do not finish without a TARGET PR URL.
 
 When finished, end your last message with exactly this block:
 
@@ -66,6 +72,7 @@ When finished, end your last message with exactly this block:
 legacy_branch: {state.analyze_branch}
 modern_branch: {state.plan_branch}
 artifacts: docs/refactor/walkthrough.mp4
+pr_url: <target repo pull request URL>
 ===END_REFACTOR_RESULT===
 """
 
@@ -96,6 +103,7 @@ def run(
             name="Implement phases",
             legacy_ref=state.analyze_branch,
             modern_ref=state.plan_branch,
+            auto_create_pr=True,
         ) as agent:
             state.implement_agent_id = agent.agent_id
             save_state(state)
@@ -108,9 +116,13 @@ def run(
                 state.plan_branch = parsed.modern_branch
                 save_state(state)
             print("step  computer-use walkthrough", flush=True)
-            send_and_stream(
+            video = send_and_stream(
                 agent, _video_prompt(config, state), verbose=config.verbose
             )
+            parsed = parsed_from_run(video, config)
+            if parsed.modern_branch:
+                state.plan_branch = parsed.modern_branch
+                save_state(state)
     except CursorAgentError as err:
         print(
             f"startup failed: {err.message}, retryable={err.is_retryable}",
@@ -122,4 +134,8 @@ def run(
         return 2
 
     print(f"plan branch  {state.plan_branch}", flush=True)
+    if parsed.artifacts:
+        print(f"artifacts    {parsed.artifacts}", flush=True)
+    if parsed.pr_url:
+        print(f"implement pr {parsed.pr_url}", flush=True)
     return 0
