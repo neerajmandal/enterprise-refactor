@@ -553,7 +553,12 @@ def parse_result_block(text: str) -> ParsedResult:
         value = value.strip()
         if key in {"legacy_branch", "analyze_branch"}:
             parsed.legacy_branch = value
-        elif key in {"modern_branch", "plan_branch", "target_branch"}:
+        elif key in {
+            "modern_branch",
+            "plan_branch",
+            "target_branch",
+            "implement_branch",
+        }:
             parsed.modern_branch = value
         elif key == "artifacts":
             parsed.artifacts = value

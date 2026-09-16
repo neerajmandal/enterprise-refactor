@@ -30,6 +30,7 @@ def show_runs(config: Config, state: WorkflowState) -> None:
         _row("Plan branch", state.plan_branch),
         "",
         _row("Implement agent", state.implement_agent_id),
+        _row("Implement branch", state.implement_branch),
         "",
         _c(DIM, "  Press enter or q to return."),
     ]

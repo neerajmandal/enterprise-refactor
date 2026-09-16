@@ -25,6 +25,7 @@ from enterprise_refactor.state import WorkflowState
 
 ANALYZE_PREFIX = "refactor/analyze-"
 PLAN_PREFIX = "refactor/plan-"
+IMPLEMENT_PREFIX = "refactor/implement-"
 
 
 def github_owner_repo(url: str) -> tuple[str, str] | None:

@@ -76,7 +76,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--plan-branch",
         default=None,
-        help="Target branch Implement should work on (skips the branch picker)",
+        help=(
+            "Plan source Implement should branch from "
+            "(skips the branch picker; does not commit on this branch)"
+        ),
     )
     parser.add_argument(
         "-v",

@@ -16,6 +16,7 @@ class WorkflowState:
     plan_agent_id: str = ""
     plan_branch: str = ""
     implement_agent_id: str = ""
+    implement_branch: str = ""
 
 
 def load_state(path: Path = STATE_PATH) -> WorkflowState:
@@ -33,6 +34,7 @@ def load_state(path: Path = STATE_PATH) -> WorkflowState:
         plan_agent_id=str(raw.get("plan_agent_id") or ""),
         plan_branch=str(raw.get("plan_branch") or ""),
         implement_agent_id=str(raw.get("implement_agent_id") or ""),
+        implement_branch=str(raw.get("implement_branch") or ""),
     )
 
 
