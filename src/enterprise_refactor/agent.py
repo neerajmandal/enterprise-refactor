@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import sys
+import threading
 import time
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
@@ -14,7 +16,6 @@ from typing import Any
 from cursor_sdk import (
     Agent,
     CloudAgentOptions,
-    CloudEnvironment,
     CloudRepository,
     RunResult,
 )
@@ -56,13 +57,9 @@ def cloud_options(
     modern_ref: str,
     auto_create_pr: bool = False,
 ) -> CloudAgentOptions:
-    env = (
-        CloudEnvironment(name=config.cursor_env)
-        if config.cursor_env.strip()
-        else None
-    )
+    # Named cloud environments cannot be combined with explicit repos.
+    # This CLI always needs both repos and starting refs, so skip env.name.
     return CloudAgentOptions(
-        env=env,
         repos=[
             CloudRepository(
                 url=remote_url(config.legacy_repo),
@@ -202,8 +199,78 @@ def recover_finished_run(run: object) -> RunResult | None:
 
 def _clear_spinner_line() -> None:
     if sys.stdout.isatty():
-        sys.stdout.write("\r" + " " * 48 + "\r")
+        width = max(48, shutil.get_terminal_size((80, 24)).columns)
+        sys.stdout.write("\r" + " " * width + "\r")
         sys.stdout.flush()
+
+
+def _elapsed_clock(started: float, now: float | None = None) -> str:
+    elapsed = max(0, int((now if now is not None else time.monotonic()) - started))
+    minutes, seconds = divmod(elapsed, 60)
+    return f"{minutes}:{seconds:02d}"
+
+
+class _QuietProgress:
+    """One-line spinner: elapsed time, cloud phase, last tool name."""
+
+    def __init__(self) -> None:
+        self._phase = "starting"
+        self._tool = "waiting"
+        self._started = time.monotonic()
+        self._stop = threading.Event()
+        self._lock = threading.Lock()
+        self._thread: threading.Thread | None = None
+        self._tty = sys.stdout.isatty()
+
+    def start(self) -> None:
+        if not self._tty:
+            return
+        self._thread = threading.Thread(target=self._spin, daemon=True)
+        self._thread.start()
+
+    def set_phase(self, status: str) -> None:
+        value = " ".join(str(status or "").split()).lower()
+        if not value:
+            return
+        with self._lock:
+            self._phase = value
+        if not self._tty:
+            print(f"status {value}", flush=True)
+
+    def set_tool(self, name: str) -> None:
+        value = " ".join(str(name or "").split())
+        if not value:
+            return
+        with self._lock:
+            if value == self._tool:
+                return
+            self._tool = value
+        if not self._tty:
+            print(f"tool   {value}", flush=True)
+
+    def _render(self, frame: int) -> str:
+        mark = _SPINNER[frame % len(_SPINNER)]
+        with self._lock:
+            phase = self._phase
+            tool = self._tool
+        line = f"  {mark}  {_elapsed_clock(self._started)}  {phase}  ·  {tool}"
+        width = max(48, shutil.get_terminal_size((80, 24)).columns)
+        if len(line) > width:
+            line = line[: width - 1] + "…"
+        return line.ljust(width)
+
+    def _spin(self) -> None:
+        frame = 0
+        while not self._stop.wait(_SPIN_INTERVAL):
+            sys.stdout.write("\r" + self._render(frame))
+            sys.stdout.flush()
+            frame += 1
+
+    def close(self) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=1)
+        _clear_spinner_line()
 
 
 def finish_cloud_run(run: object) -> RunResult:
@@ -232,8 +299,9 @@ def wait_for_cloud_run(run: object) -> RunResult:
                     break
             if sys.stdout.isatty():
                 mark = _SPINNER[frame % len(_SPINNER)]
-                elapsed = int(now - started)
-                sys.stdout.write(f"\r  {mark}  cloud run  {elapsed:>4}s")
+                sys.stdout.write(
+                    f"\r  {mark}  {_elapsed_clock(started, now)}  finishing"
+                )
                 sys.stdout.flush()
                 frame += 1
             time.sleep(_SPIN_INTERVAL)
@@ -303,6 +371,24 @@ def _assistant_texts(message: object) -> list[str]:
         if text:
             texts.append(str(text))
     return texts
+
+
+def write_quiet_feed(messages: Iterator[Any]) -> bool:
+    """Drain the stream; show a spinner plus the latest tool name."""
+    progress = _QuietProgress()
+    progress.start()
+    streamed = False
+    try:
+        for message in messages:
+            streamed = True
+            kind = str(_field(message, "type", "") or "")
+            if kind == "status":
+                progress.set_phase(str(_field(message, "status", "") or ""))
+            elif kind == "tool_call":
+                progress.set_tool(str(_field(message, "name", "") or ""))
+        return streamed
+    finally:
+        progress.close()
 
 
 def write_live_feed(messages: Iterator[Any]) -> bool:
@@ -402,15 +488,21 @@ def write_live_feed(messages: Iterator[Any]) -> bool:
     return streamed
 
 
-def send_and_stream(agent: Agent, prompt: str) -> RunResult:
-    print(f"agent  {agent.agent_id}", flush=True)
+def send_and_stream(
+    agent: Agent, prompt: str, *, verbose: bool = False
+) -> RunResult:
     url = agent_url(agent.agent_id)
     if url:
         print(f"url    {url}", flush=True)
+    else:
+        print(f"agent  {agent.agent_id}", flush=True)
     run = agent.send(prompt)
-    print(f"run    {run.id}", flush=True)
-    print("", flush=True)
-    streamed = write_live_feed(run.messages())
+    if verbose:
+        print(f"run    {run.id}", flush=True)
+        print("", flush=True)
+        streamed = write_live_feed(run.messages())
+    else:
+        streamed = write_quiet_feed(run.messages())
     result = finish_cloud_run(run)
     if result.status != "finished" and _has_result_block(result.result or ""):
         result = RunResult(

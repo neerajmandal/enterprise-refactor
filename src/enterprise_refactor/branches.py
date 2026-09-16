@@ -1,4 +1,4 @@
-"""List and resolve legacy git branches for Plan."""
+"""List and resolve remote git branches for Plan and Implement."""
 
 from __future__ import annotations
 
@@ -23,7 +23,8 @@ from enterprise_refactor.config import Config, ask, clean
 from enterprise_refactor.menu import _hide_cursor, _read_key, _show_cursor
 from enterprise_refactor.state import WorkflowState
 
-_ANALYZE_PREFIX = "refactor/analyze-"
+ANALYZE_PREFIX = "refactor/analyze-"
+PLAN_PREFIX = "refactor/plan-"
 
 
 def github_owner_repo(url: str) -> tuple[str, str] | None:
@@ -111,16 +112,18 @@ def _branches_from_ls_remote(url: str) -> list[str] | None:
     return names or None
 
 
-def sort_branch_names(names: list[str]) -> list[str]:
-    analyze = sorted(
-        (name for name in names if name.startswith(_ANALYZE_PREFIX)),
+def sort_branch_names(names: list[str], *, preferred_prefix: str) -> list[str]:
+    preferred = sorted(
+        (name for name in names if name.startswith(preferred_prefix)),
         reverse=True,
     )
-    rest = sorted(name for name in names if not name.startswith(_ANALYZE_PREFIX))
-    return analyze + rest
+    rest = sorted(name for name in names if not name.startswith(preferred_prefix))
+    return preferred + rest
 
 
-def list_remote_branches(url: str) -> tuple[list[str], str]:
+def list_remote_branches(
+    url: str, *, preferred_prefix: str
+) -> tuple[list[str], str]:
     seen: set[str] = set()
     names: list[str] = []
     for group in (_branches_from_ls_remote(url), _branches_from_gh(url)):
@@ -129,16 +132,16 @@ def list_remote_branches(url: str) -> tuple[list[str], str]:
                 seen.add(name)
                 names.append(name)
     if names:
-        return sort_branch_names(names), ""
-    return [], "Could not list remote branches on the legacy repo."
+        return sort_branch_names(names, preferred_prefix=preferred_prefix), ""
+    return [], "Could not list remote branches."
 
 
 def default_branch_index(
-    names: list[str], *, saved: str, fallback: str
+    names: list[str], *, preferred_prefix: str, saved: str, fallback: str
 ) -> int:
-    analyze = [name for name in names if name.startswith(_ANALYZE_PREFIX)]
-    if analyze:
-        return names.index(analyze[0])
+    preferred = [name for name in names if name.startswith(preferred_prefix)]
+    if preferred:
+        return names.index(preferred[0])
     if saved and saved in names:
         return names.index(saved)
     if fallback and fallback in names:
@@ -165,8 +168,8 @@ _MONTHS = (
 _PICKER_WINDOW = 16
 
 
-def _analyze_when(name: str) -> str:
-    stamp = name.removeprefix(_ANALYZE_PREFIX)
+def _stamp_when(name: str, prefix: str) -> str:
+    stamp = name.removeprefix(prefix)
     if len(stamp) != 8 or not stamp.isdigit():
         return ""
     month = int(stamp[4:6])
@@ -176,13 +179,15 @@ def _analyze_when(name: str) -> str:
     return f"{day:>2} {_MONTHS[month - 1]} {stamp[:4]}"
 
 
-def _badge(name: str, *, default: str, saved: str) -> str:
-    if name == default and name.startswith(_ANALYZE_PREFIX):
+def _badge(
+    name: str, *, prefix: str, default: str, saved: str, kind_badge: str
+) -> str:
+    if name == default and name.startswith(prefix):
         return "recommended"
     if name == saved:
         return "last used"
-    if name.startswith(_ANALYZE_PREFIX):
-        return "analyze"
+    if name.startswith(prefix):
+        return kind_badge
     return ""
 
 
@@ -197,8 +202,19 @@ def _picker_window(height: int) -> int:
     return max(5, min(_PICKER_WINDOW, height - 26))
 
 
-def _branch_detail(name: str, *, default: str, saved: str) -> str:
-    parts = [part for part in (_analyze_when(name), _badge(name, default=default, saved=saved)) if part]
+def _branch_detail(
+    name: str, *, prefix: str, default: str, saved: str, kind_badge: str
+) -> str:
+    parts = [
+        part
+        for part in (
+            _stamp_when(name, prefix),
+            _badge(
+                name, prefix=prefix, default=default, saved=saved, kind_badge=kind_badge
+            ),
+        )
+        if part
+    ]
     return "   ".join(parts)
 
 
@@ -208,19 +224,28 @@ def render_branch_picker(
     modern_repo: str,
     cursor_env: str,
     model: str,
+    title: str,
+    subtitle: str,
+    preferred_prefix: str,
+    preferred_label: str,
+    kind_badge: str,
     names: list[str],
     index: int,
     default: str,
     saved: str,
 ) -> str:
     width, height = term_size()
-    analyze = [name for name in names if name.startswith(_ANALYZE_PREFIX)]
+    preferred = [name for name in names if name.startswith(preferred_prefix)]
     count = f"{len(names)} branch" + ("es" if len(names) != 1 else "")
-    extra = f"  ·  {len(analyze)} analyze" if analyze else ""
-    start, end = _window(len(names), index if index < len(names) else 0, _picker_window(height))
+    extra = (
+        f"  ·  {len(preferred)} {kind_badge}" if preferred else ""
+    )
+    start, end = _window(
+        len(names), index if index < len(names) else 0, _picker_window(height)
+    )
     body = [
-        _c(WHITE, "  Plan"),
-        _c(DIM, "  Choose the legacy branch Plan will fetch and read."),
+        _c(WHITE, f"  {title}"),
+        _c(DIM, f"  {subtitle}"),
         "",
         f"  {_c(DIM, 'Remote'.ljust(16))}{_c(WHITE, count + extra)}",
         "",
@@ -231,7 +256,7 @@ def render_branch_picker(
     last_kind = ""
     for i in range(start, end):
         name = names[i]
-        kind = "Analyze" if name.startswith(_ANALYZE_PREFIX) else "Other"
+        kind = preferred_label if name.startswith(preferred_prefix) else "Other"
         if kind != last_kind:
             if last_kind:
                 body.append("")
@@ -240,9 +265,15 @@ def render_branch_picker(
         body.append(
             paint_menu_row(
                 number="",
-                icon="⌕" if name.startswith(_ANALYZE_PREFIX) else "·",
+                icon="⌕" if name.startswith(preferred_prefix) else "·",
                 title=name,
-                detail=_branch_detail(name, default=default, saved=saved),
+                detail=_branch_detail(
+                    name,
+                    prefix=preferred_prefix,
+                    default=default,
+                    saved=saved,
+                    kind_badge=kind_badge,
+                ),
                 width=width,
                 selected=i == index,
                 title_col=36,
@@ -278,6 +309,11 @@ def choose_remote_branch(
     names: list[str],
     *,
     config: Config,
+    title: str,
+    subtitle: str,
+    preferred_prefix: str,
+    preferred_label: str,
+    kind_badge: str,
     default: str,
     saved: str,
     index: int,
@@ -293,6 +329,11 @@ def choose_remote_branch(
                     modern_repo=config.modern_repo,
                     cursor_env=config.cursor_env,
                     model=config.model,
+                    title=title,
+                    subtitle=subtitle,
+                    preferred_prefix=preferred_prefix,
+                    preferred_label=preferred_label,
+                    kind_badge=kind_badge,
                     names=names,
                     index=index,
                     default=default,
@@ -319,22 +360,28 @@ def choose_remote_branch(
         _show_cursor()
 
 
-def resolve_legacy_plan_branch(
+def resolve_remote_branch(
     config: Config,
-    state: WorkflowState,
     *,
-    analyze_branch: str | None,
+    title: str,
+    subtitle: str,
+    repo_url: str,
+    preferred_prefix: str,
+    preferred_label: str,
+    kind_badge: str,
+    saved: str,
+    fallback: str,
+    flagged: str | None,
+    ask_label: str,
+    missing_hint: str,
 ) -> str | None:
-    flagged = clean(analyze_branch or "")
-    if flagged:
-        return flagged
+    chosen = clean(flagged or "")
+    if chosen:
+        return chosen
     if not sys.stdin.isatty() or not sys.stdout.isatty():
-        if state.analyze_branch:
-            return state.analyze_branch
-        raise SystemExit(
-            "Pass --analyze-branch or run this command in a terminal "
-            "to pick a legacy branch."
-        )
+        if saved:
+            return saved
+        raise SystemExit(missing_hint)
 
     print_screen(
         render_page(
@@ -343,12 +390,14 @@ def resolve_legacy_plan_branch(
             cursor_env=config.cursor_env,
             model=config.model,
             body=[
-                _c(WHITE, "  Plan"),
-                _c(DIM, f"  Listing remotes on {repo_label(config.legacy_repo)}…"),
+                _c(WHITE, f"  {title}"),
+                _c(DIM, f"  Listing remotes on {repo_label(repo_url)}…"),
             ],
         )
     )
-    names, error = list_remote_branches(config.legacy_repo)
+    names, error = list_remote_branches(
+        repo_url, preferred_prefix=preferred_prefix
+    )
     if not names:
         if error:
             print_screen(
@@ -358,8 +407,8 @@ def resolve_legacy_plan_branch(
                     cursor_env=config.cursor_env,
                     model=config.model,
                     body=[
-                        _c(WHITE, "  Plan"),
-                        _c(DIM, "  Could not list remote branches on the legacy repo."),
+                        _c(WHITE, f"  {title}"),
+                        _c(DIM, f"  Could not list remote branches on {repo_label(repo_url)}."),
                         "",
                         _c(MUTED, f"  {error}"),
                         "",
@@ -367,15 +416,73 @@ def resolve_legacy_plan_branch(
                     ],
                 )
             )
-        return ask("Legacy branch")
+        return ask(ask_label)
 
     index = default_branch_index(
-        names, saved=state.analyze_branch, fallback=config.legacy_ref
+        names,
+        preferred_prefix=preferred_prefix,
+        saved=saved,
+        fallback=fallback,
     )
     return choose_remote_branch(
         names,
         config=config,
+        title=title,
+        subtitle=subtitle,
+        preferred_prefix=preferred_prefix,
+        preferred_label=preferred_label,
+        kind_badge=kind_badge,
         default=names[index],
-        saved=state.analyze_branch,
+        saved=saved,
         index=index,
+    )
+
+
+def resolve_legacy_plan_branch(
+    config: Config,
+    state: WorkflowState,
+    *,
+    analyze_branch: str | None,
+) -> str | None:
+    return resolve_remote_branch(
+        config,
+        title="Plan",
+        subtitle="Choose the legacy branch Plan will fetch and read.",
+        repo_url=config.legacy_repo,
+        preferred_prefix=ANALYZE_PREFIX,
+        preferred_label="Analyze",
+        kind_badge="analyze",
+        saved=state.analyze_branch,
+        fallback=config.legacy_ref,
+        flagged=analyze_branch,
+        ask_label="Legacy branch",
+        missing_hint=(
+            "Pass --analyze-branch or run this command in a terminal "
+            "to pick a legacy branch."
+        ),
+    )
+
+
+def resolve_target_implement_branch(
+    config: Config,
+    state: WorkflowState,
+    *,
+    plan_branch: str | None,
+) -> str | None:
+    return resolve_remote_branch(
+        config,
+        title="Implement",
+        subtitle="Choose the target branch Implement will fetch and work on.",
+        repo_url=config.modern_repo,
+        preferred_prefix=PLAN_PREFIX,
+        preferred_label="Plan",
+        kind_badge="plan",
+        saved=state.plan_branch,
+        fallback=config.modern_ref,
+        flagged=plan_branch,
+        ask_label="Target branch",
+        missing_hint=(
+            "Pass --plan-branch or run this command in a terminal "
+            "to pick a target branch."
+        ),
     )

@@ -12,6 +12,7 @@ from enterprise_refactor.agent import (
     parsed_from_run,
     send_and_stream,
 )
+from enterprise_refactor.branches import resolve_target_implement_branch
 from enterprise_refactor.config import Config
 from enterprise_refactor.state import WorkflowState, save_state
 
@@ -69,15 +70,25 @@ artifacts: docs/refactor/walkthrough.mp4
 """
 
 
-def run(config: Config, state: WorkflowState) -> int:
-    if not state.analyze_branch or not state.plan_branch:
-        print(
-            "Implement needs Analyze and Plan first "
-            "(legacy analysis branch and target plan branch).",
-            file=sys.stderr,
-        )
-        return 1
+def run(
+    config: Config,
+    state: WorkflowState,
+    *,
+    plan_branch: str | None = None,
+) -> int | None:
+    plan_ref = resolve_target_implement_branch(
+        config, state, plan_branch=plan_branch
+    )
+    if not plan_ref:
+        return None
+    state.plan_branch = plan_ref
+    save_state(state)
 
+    if not state.analyze_branch:
+        state.analyze_branch = config.legacy_ref
+
+    print(f"plan branch     {state.plan_branch}", flush=True)
+    print(f"analyze branch  {state.analyze_branch}", flush=True)
     print("workflow  Implement", flush=True)
     try:
         with create_cloud_agent(
@@ -89,13 +100,17 @@ def run(config: Config, state: WorkflowState) -> int:
             state.implement_agent_id = agent.agent_id
             save_state(state)
             print("step  implement remaining phases", flush=True)
-            result = send_and_stream(agent, _implement_prompt(config, state))
+            result = send_and_stream(
+                agent, _implement_prompt(config, state), verbose=config.verbose
+            )
             parsed = parsed_from_run(result, config)
             if parsed.modern_branch:
                 state.plan_branch = parsed.modern_branch
                 save_state(state)
             print("step  computer-use walkthrough", flush=True)
-            send_and_stream(agent, _video_prompt(config, state))
+            send_and_stream(
+                agent, _video_prompt(config, state), verbose=config.verbose
+            )
     except CursorAgentError as err:
         print(
             f"startup failed: {err.message}, retryable={err.is_retryable}",

@@ -154,12 +154,12 @@ def run(
     *,
     prompt: str | None = None,
     analyze_branch: str | None = None,
-) -> int:
+) -> int | None:
     analyze_ref = resolve_legacy_plan_branch(
         config, state, analyze_branch=analyze_branch
     )
     if not analyze_ref:
-        return 0
+        return None
     state.analyze_branch = analyze_ref
     save_state(state)
 
@@ -178,7 +178,9 @@ def run(
             state.plan_agent_id = agent.agent_id
             save_state(state)
             result = send_and_stream(
-                agent, _prompt(config, state, stamp, modernization_ask)
+                agent,
+                _prompt(config, state, stamp, modernization_ask),
+                verbose=config.verbose,
             )
     except CursorAgentError as err:
         print(

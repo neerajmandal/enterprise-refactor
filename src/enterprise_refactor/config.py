@@ -30,6 +30,7 @@ class Config:
     model: str
     cursor_env: str
     ready: bool
+    verbose: bool = False
 
 
 def clean(value: str) -> str:
@@ -131,6 +132,9 @@ def resolve_config(args: argparse.Namespace) -> Config:
     ).strip()
     model = (args.model or os.environ.get("CURSOR_MODEL") or DEFAULT_MODEL).strip()
     cursor_env = clean(args.cursor_env or os.environ.get("CURSOR_ENV") or "")
+    verbose = bool(getattr(args, "verbose", False)) or os.environ.get(
+        "CURSOR_VERBOSE", ""
+    ).strip().lower() in {"1", "true", "yes", "on"}
 
     complete = bool(api_key and legacy_repo and modern_repo and cursor_env)
     if not complete:
@@ -173,6 +177,7 @@ def resolve_config(args: argparse.Namespace) -> Config:
         model=model,
         cursor_env=cursor_env,
         ready=True,
+        verbose=verbose,
     )
 
 

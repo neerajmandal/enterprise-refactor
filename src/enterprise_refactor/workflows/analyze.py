@@ -221,7 +221,9 @@ def run(config: Config, state: WorkflowState) -> int:
         ) as agent:
             state.analyze_agent_id = agent.agent_id
             save_state(state)
-            result = send_and_stream(agent, _prompt(config, stamp))
+            result = send_and_stream(
+                agent, _prompt(config, stamp), verbose=config.verbose
+            )
     except CursorAgentError as err:
         print(
             f"startup failed: {err.message}, retryable={err.is_retryable}",

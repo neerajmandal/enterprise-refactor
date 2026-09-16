@@ -10,7 +10,7 @@ import tty
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from enterprise_refactor.banner import WHITE, _c, paint_menu_row, print_home
+from enterprise_refactor.banner import WHITE, _c, clear_screen, paint_menu_row, print_home
 
 HOME_ITEMS: tuple[tuple[str, str, str, str, str], ...] = (
     ("analyze", "1", "⌕", "Analyze", "Understand the legacy codebase"),
@@ -179,6 +179,29 @@ def choose_item(
     except KeyboardInterrupt:
         sys.stdout.write("\n")
         raise
+    finally:
+        _show_cursor()
+
+
+def leave_home_for_workflow() -> None:
+    """Drop the TUI so Analyze / Plan / Implement logs are the only thing on screen."""
+    clear_screen()
+
+
+def wait_for_menu() -> None:
+    """Keep the workflow log visible until the operator dismisses it."""
+    if not sys.stdin.isatty() or not sys.stdout.isatty():
+        return
+    print("", flush=True)
+    print("Press enter to return to the menu.", flush=True)
+    _hide_cursor()
+    try:
+        while True:
+            key = _read_key()
+            if key in {"enter", "quit", "esc", "back"}:
+                return
+    except KeyboardInterrupt:
+        return
     finally:
         _show_cursor()
 

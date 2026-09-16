@@ -12,7 +12,7 @@ from enterprise_refactor.config import (
     Config,
     resolve_config,
 )
-from enterprise_refactor.menu import choose_phase
+from enterprise_refactor.menu import choose_phase, leave_home_for_workflow, wait_for_menu
 from enterprise_refactor.runs import show_runs
 from enterprise_refactor.settings import edit_settings
 from enterprise_refactor.state import WorkflowState, load_state
@@ -73,6 +73,17 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Legacy branch Plan should read (skips the branch picker)",
     )
+    parser.add_argument(
+        "--plan-branch",
+        default=None,
+        help="Target branch Implement should work on (skips the branch picker)",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Stream thinking, tools, tasks, and assistant text (or CURSOR_VERBOSE)",
+    )
     args = parser.parse_args(argv)
 
     config = resolve_config(args)
@@ -84,13 +95,15 @@ def main(argv: list[str] | None = None) -> int:
         ready=config.ready,
     )
     if args.workflow:
-        return _run_workflow(
+        code = _run_workflow(
             args.workflow,
             config,
             load_state(),
             args.prompt,
             args.analyze_branch,
+            args.plan_branch,
         )
+        return 0 if code is None else code
 
     last = 0
     index = 0
@@ -102,7 +115,6 @@ def main(argv: list[str] | None = None) -> int:
             model=config.model,
             index=index,
         )
-        print("", flush=True)
         if workflow == "settings":
             edit_settings(config)
             index = 4
@@ -111,14 +123,18 @@ def main(argv: list[str] | None = None) -> int:
             show_runs(config, load_state())
             index = 3
             continue
+        if workflow not in {"plan", "implement"}:
+            leave_home_for_workflow()
         last = _run_workflow(
             workflow,
             config,
             load_state(),
             args.prompt,
             args.analyze_branch,
+            args.plan_branch,
         )
-        print("", flush=True)
+        if last is not None:
+            wait_for_menu()
         index = {"analyze": 1, "plan": 2, "implement": 2}.get(workflow, 0)
 
 
@@ -128,14 +144,15 @@ def _run_workflow(
     state: WorkflowState,
     prompt: str | None,
     analyze_branch: str | None,
-) -> int:
+    plan_branch: str | None,
+) -> int | None:
     if workflow == "analyze":
         return analyze.run(config, state)
     if workflow == "plan":
         return plan.run(
             config, state, prompt=prompt, analyze_branch=analyze_branch
         )
-    return implement.run(config, state)
+    return implement.run(config, state, plan_branch=plan_branch)
 
 
 if __name__ == "__main__":
