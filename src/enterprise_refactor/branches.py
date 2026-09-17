@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+from collections.abc import Sequence
 from urllib.parse import urlparse
 
 from enterprise_refactor.banner import (
@@ -113,17 +114,31 @@ def _branches_from_ls_remote(url: str) -> list[str] | None:
     return names or None
 
 
-def sort_branch_names(names: list[str], *, preferred_prefix: str) -> list[str]:
-    preferred = sorted(
-        (name for name in names if name.startswith(preferred_prefix)),
-        reverse=True,
-    )
-    rest = sorted(name for name in names if not name.startswith(preferred_prefix))
-    return preferred + rest
+def _prefix_list(preferred_prefixes: str | Sequence[str]) -> tuple[str, ...]:
+    if isinstance(preferred_prefixes, str):
+        return (preferred_prefixes,)
+    return tuple(preferred_prefixes)
+
+
+def sort_branch_names(
+    names: list[str], *, preferred_prefix: str | Sequence[str]
+) -> list[str]:
+    prefixes = _prefix_list(preferred_prefix)
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for prefix in prefixes:
+        group = sorted(
+            (name for name in names if name.startswith(prefix) and name not in seen),
+            reverse=True,
+        )
+        ordered.extend(group)
+        seen.update(group)
+    rest = sorted(name for name in names if name not in seen)
+    return ordered + rest
 
 
 def list_remote_branches(
-    url: str, *, preferred_prefix: str
+    url: str, *, preferred_prefix: str | Sequence[str]
 ) -> tuple[list[str], str]:
     seen: set[str] = set()
     names: list[str] = []
@@ -138,11 +153,17 @@ def list_remote_branches(
 
 
 def default_branch_index(
-    names: list[str], *, preferred_prefix: str, saved: str, fallback: str
+    names: list[str],
+    *,
+    preferred_prefix: str | Sequence[str],
+    saved: str,
+    fallback: str,
 ) -> int:
-    preferred = [name for name in names if name.startswith(preferred_prefix)]
-    if preferred:
-        return names.index(preferred[0])
+    prefixes = _prefix_list(preferred_prefix)
+    for prefix in prefixes:
+        preferred = [name for name in names if name.startswith(prefix)]
+        if preferred:
+            return names.index(preferred[0])
     if saved and saved in names:
         return names.index(saved)
     if fallback and fallback in names:
@@ -180,14 +201,23 @@ def _stamp_when(name: str, prefix: str) -> str:
     return f"{day:>2} {_MONTHS[month - 1]} {stamp[:4]}"
 
 
+def _kind_for(
+    name: str, kinds: Sequence[tuple[str, str, str]]
+) -> tuple[str, str, str]:
+    for prefix, label, badge in kinds:
+        if name.startswith(prefix):
+            return prefix, label, badge
+    return "", "Other", ""
+
+
 def _badge(
     name: str, *, prefix: str, default: str, saved: str, kind_badge: str
 ) -> str:
-    if name == default and name.startswith(prefix):
+    if name == default and (not prefix or name.startswith(prefix)):
         return "recommended"
     if name == saved:
         return "last used"
-    if name.startswith(prefix):
+    if prefix and name.startswith(prefix):
         return kind_badge
     return ""
 
@@ -219,6 +249,17 @@ def _branch_detail(
     return "   ".join(parts)
 
 
+def _kinds(
+    preferred_prefix: str,
+    preferred_label: str,
+    kind_badge: str,
+    preferred_kinds: Sequence[tuple[str, str, str]] | None,
+) -> tuple[tuple[str, str, str], ...]:
+    if preferred_kinds:
+        return tuple(preferred_kinds)
+    return ((preferred_prefix, preferred_label, kind_badge),)
+
+
 def render_branch_picker(
     *,
     legacy_repo: str,
@@ -234,13 +275,17 @@ def render_branch_picker(
     index: int,
     default: str,
     saved: str,
+    preferred_kinds: Sequence[tuple[str, str, str]] | None = None,
 ) -> str:
     width, height = term_size()
-    preferred = [name for name in names if name.startswith(preferred_prefix)]
+    kinds = _kinds(preferred_prefix, preferred_label, kind_badge, preferred_kinds)
+    bits: list[str] = []
+    for prefix, _label, badge in kinds:
+        n = sum(1 for name in names if name.startswith(prefix))
+        if n:
+            bits.append(f"{n} {badge}")
     count = f"{len(names)} branch" + ("es" if len(names) != 1 else "")
-    extra = (
-        f"  ·  {len(preferred)} {kind_badge}" if preferred else ""
-    )
+    extra = f"  ·  {' · '.join(bits)}" if bits else ""
     start, end = _window(
         len(names), index if index < len(names) else 0, _picker_window(height)
     )
@@ -257,7 +302,7 @@ def render_branch_picker(
     last_kind = ""
     for i in range(start, end):
         name = names[i]
-        kind = preferred_label if name.startswith(preferred_prefix) else "Other"
+        prefix, kind, badge = _kind_for(name, kinds)
         if kind != last_kind:
             if last_kind:
                 body.append("")
@@ -266,14 +311,14 @@ def render_branch_picker(
         body.append(
             paint_menu_row(
                 number="",
-                icon="⌕" if name.startswith(preferred_prefix) else "·",
+                icon="⌕" if prefix else "·",
                 title=name,
                 detail=_branch_detail(
                     name,
-                    prefix=preferred_prefix,
+                    prefix=prefix or preferred_prefix,
                     default=default,
                     saved=saved,
-                    kind_badge=kind_badge,
+                    kind_badge=badge or kind_badge,
                 ),
                 width=width,
                 selected=i == index,
@@ -318,6 +363,7 @@ def choose_remote_branch(
     default: str,
     saved: str,
     index: int,
+    preferred_kinds: Sequence[tuple[str, str, str]] | None = None,
 ) -> str | None:
     total = len(names) + 1
     index = index % total
@@ -339,6 +385,7 @@ def choose_remote_branch(
                     index=index,
                     default=default,
                     saved=saved,
+                    preferred_kinds=preferred_kinds,
                 )
             )
             key = _read_key()
@@ -375,6 +422,7 @@ def resolve_remote_branch(
     flagged: str | None,
     ask_label: str,
     missing_hint: str,
+    preferred_kinds: Sequence[tuple[str, str, str]] | None = None,
 ) -> str | None:
     chosen = clean(flagged or "")
     if chosen:
@@ -383,6 +431,9 @@ def resolve_remote_branch(
         if saved:
             return saved
         raise SystemExit(missing_hint)
+
+    kinds = _kinds(preferred_prefix, preferred_label, kind_badge, preferred_kinds)
+    prefixes = tuple(prefix for prefix, _, _ in kinds)
 
     print_screen(
         render_page(
@@ -397,7 +448,7 @@ def resolve_remote_branch(
         )
     )
     names, error = list_remote_branches(
-        repo_url, preferred_prefix=preferred_prefix
+        repo_url, preferred_prefix=prefixes
     )
     if not names:
         if error:
@@ -421,7 +472,7 @@ def resolve_remote_branch(
 
     index = default_branch_index(
         names,
-        preferred_prefix=preferred_prefix,
+        preferred_prefix=prefixes,
         saved=saved,
         fallback=fallback,
     )
@@ -436,6 +487,7 @@ def resolve_remote_branch(
         default=names[index],
         saved=saved,
         index=index,
+        preferred_kinds=kinds,
     )
 
 
@@ -475,15 +527,19 @@ def resolve_target_implement_branch(
         title="Implement",
         subtitle="Choose the target branch Implement will fetch and work on.",
         repo_url=config.modern_repo,
-        preferred_prefix=PLAN_PREFIX,
-        preferred_label="Plan",
-        kind_badge="plan",
-        saved=state.plan_branch,
+        preferred_prefix=IMPLEMENT_PREFIX,
+        preferred_label="Implement",
+        kind_badge="implement",
+        saved=state.implement_branch or state.plan_branch,
         fallback=config.modern_ref,
         flagged=plan_branch,
         ask_label="Target branch",
         missing_hint=(
             "Pass --plan-branch or run this command in a terminal "
             "to pick a target branch."
+        ),
+        preferred_kinds=(
+            (IMPLEMENT_PREFIX, "Implement", "implement"),
+            (PLAN_PREFIX, "Plan", "plan"),
         ),
     )

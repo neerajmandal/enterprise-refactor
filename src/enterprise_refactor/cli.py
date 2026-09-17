@@ -13,6 +13,7 @@ from enterprise_refactor.config import (
     resolve_config,
 )
 from enterprise_refactor.menu import choose_phase, leave_home_for_workflow, wait_for_menu
+from enterprise_refactor.phases import parse_phase_flag
 from enterprise_refactor.runs import show_runs
 from enterprise_refactor.settings import edit_settings
 from enterprise_refactor.state import WorkflowState, load_state
@@ -77,8 +78,16 @@ def main(argv: list[str] | None = None) -> int:
         "--plan-branch",
         default=None,
         help=(
-            "Plan source Implement should branch from "
-            "(skips the branch picker; does not commit on this branch)"
+            "Target branch Implement should read (plan or implement; "
+            "skips the branch picker)"
+        ),
+    )
+    parser.add_argument(
+        "--phases",
+        default=None,
+        help=(
+            "Comma-separated plan.json phase ids for Implement "
+            "(skips the phase picker; omit to implement all remaining)"
         ),
     )
     parser.add_argument(
@@ -105,6 +114,7 @@ def main(argv: list[str] | None = None) -> int:
             args.prompt,
             args.analyze_branch,
             args.plan_branch,
+            parse_phase_flag(args.phases),
         )
         return 0 if code is None else code
 
@@ -135,6 +145,7 @@ def main(argv: list[str] | None = None) -> int:
             args.prompt,
             args.analyze_branch,
             args.plan_branch,
+            parse_phase_flag(args.phases),
         )
         if last is not None:
             wait_for_menu()
@@ -148,6 +159,7 @@ def _run_workflow(
     prompt: str | None,
     analyze_branch: str | None,
     plan_branch: str | None,
+    phases: list[str] | None,
 ) -> int | None:
     if workflow == "analyze":
         return analyze.run(config, state)
@@ -155,7 +167,9 @@ def _run_workflow(
         return plan.run(
             config, state, prompt=prompt, analyze_branch=analyze_branch
         )
-    return implement.run(config, state, plan_branch=plan_branch)
+    return implement.run(
+        config, state, plan_branch=plan_branch, phases=phases
+    )
 
 
 if __name__ == "__main__":

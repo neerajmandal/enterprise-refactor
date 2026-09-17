@@ -34,7 +34,7 @@ Full-screen TUI. **↑↓** or **j/k** move, **1–5** jump, **enter** selects, 
 | --- | --- |
 | **Analyze** | Discovery-only map of the legacy system. Target repo is context only. Cloud agent pushes `refactor/analyze-YYYYMMDD` on the **legacy** repo (no PR) with `docs/modernization/CURRENT_STATE_ANALYSIS.md` and `docs/modernization/current-state.md`. |
 | **Plan** | Pick which **legacy** remote branch to read, then enter a modernization prompt. Agent checks out that branch, writes a phased plan on `refactor/plan-YYYYMMDD` on the **target** repo (`docs/refactor/plan.md`, `docs/refactor/plan.json`, `docs/refactor/phases/NN-<slug>.md`), and opens a PR on the target only. |
-| **Implement** | Requires a saved analyze branch and plan branch. Two turns on one agent: implement every undone phase (check off, run `test_command`, push), then a computer-use walkthrough (`docs/refactor/walkthrough.mp4` + `walkthrough.md`, or screenshots under `docs/refactor/walkthrough/` if video is not possible). |
+| **Implement** | Pick a target **plan** or **implement** branch, then choose phases. Two turns on one agent: implement the chosen phases (check off, run `test_command`, push), then a computer-use walkthrough (`docs/refactor/walkthrough.mp4` + `walkthrough.md`, or screenshots under `docs/refactor/walkthrough/` if video is not possible). |
 | **Runs** | Read-only last agent IDs and branch names from `.refactor/state.json`. Enter or **q** returns. |
 | **Settings** | Session-only override of legacy repo, modern repo, or API key. Updates process env; **does not write `.env`**. Env name and model stay as started (use flags / `.env`). |
 
@@ -59,6 +59,27 @@ If remotes cannot be listed, the CLI asks for a branch name. Non-TTY Plan uses `
 
 The modernization ask comes **after** the branch is chosen (`--prompt`, `CURSOR_PLAN_PROMPT`, or a prompt). That value is not written to `.env`.
 
+## Implement branch and phase pickers
+
+Unless you pass `--plan-branch`:
+
+1. List remote heads on the **target** repo.
+2. Sort `refactor/implement-*` first (newest date stamp first), then `refactor/plan-*`, then other branches.
+3. Default selection is the newest implement branch, else the newest plan branch, else last used from state, else `--modern-ref` / `main`.
+4. **↑↓** / enter to choose, **esc** / Back to cancel (no agent).
+
+Then the CLI fetches `docs/refactor/plan.json` from that branch (`gh api`, then a shallow `git fetch` if needed) and draws the phase list:
+
+- Done phases are checked and locked.
+- Pending phases start unchecked. **space** toggles a pending phase.
+- **Implement all remaining** (`a`) runs every phase that is not `done`, ignoring toggles.
+- **Implement selected** runs the toggled pending phases and any undone dependencies.
+- **esc** / Back returns to the branch list.
+
+If `plan.json` cannot be read, you can still choose **Implement all remaining** and the agent implements every undone phase on the branch.
+
+Non-TTY Implement uses `--plan-branch` or the branch already in `.refactor/state.json`. Pass `--phases 01-foo,03-bar` to name phase ids; omit `--phases` to implement all remaining.
+
 ## What a cloud run does
 
 The CLI creates a Cursor Cloud Agent (`cursor-sdk`) with:
@@ -66,7 +87,7 @@ The CLI creates a Cursor Cloud Agent (`cursor-sdk`) with:
 - the selected `--model` / `CURSOR_MODEL` (default `composer-2.5`)
 - `CURSOR_ENV` as the named cloud environment
 - both repos as `CloudRepository` entries (`owner/repo` is expanded to `https://github.com/owner/repo.git`)
-- starting refs: Analyze uses `--legacy-ref` / `--modern-ref` (default `main`); Plan starts the legacy side on the chosen analyze branch; Implement starts on the saved analyze and plan branches
+- starting refs: Analyze uses `--legacy-ref` / `--modern-ref` (default `main`); Plan starts the legacy side on the chosen analyze branch; Implement starts the target side on the chosen plan or implement branch
 
 While the agent works, the CLI streams thinking, tools, tasks, status, usage, and assistant text, then polls until the cloud run finishes (or fails). Agent IDs print as `https://cursor.com/agents/<id>` when they look like `bc-…`.
 
@@ -84,6 +105,8 @@ Workflow IDs and branch names are stored in gitignored `.refactor/state.json`. S
 | `--model` / `CURSOR_MODEL` | `composer-2.5` | Model id |
 | `--prompt` / `CURSOR_PLAN_PROMPT` | prompted | Plan modernization ask (not saved to `.env`) |
 | `--analyze-branch` | picker / state | Legacy branch Plan reads (skips the picker) |
+| `--plan-branch` | picker / state | Target plan or implement branch Implement reads (skips the branch picker) |
+| `--phases` | all remaining | Comma-separated `plan.json` ids (skips the phase picker) |
 | `CURSOR_API_KEY` | prompted / `.env` | User or service-account API key |
 
 `CURSOR_REPO` is accepted as an alias for the legacy source.
