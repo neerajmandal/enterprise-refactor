@@ -13,8 +13,14 @@ from dataclasses import dataclass
 from enterprise_refactor.integrations.git.remotes import github_owner_repo, remote_url
 
 PLAN_JSON_PATH = "docs/refactor/plan.json"
+COMPUTER_USE_PHASE_ID = "99-computer-use"
+IMPLEMENT_KIND = "implement"
+COMPUTER_USE_KIND = "computer_use"
 
 _PHASE_NUM = re.compile(r"(?:phase\s*)?(\d+)", re.IGNORECASE)
+_COMPUTER_USE_HINT = re.compile(
+    r"computer[-_ ]use|walkthrough", re.IGNORECASE
+)
 
 
 @dataclass(frozen=True)
@@ -25,10 +31,51 @@ class Phase:
     status: str = "todo"
     test_command: str = ""
     done_when: str = ""
+    kind: str = IMPLEMENT_KIND
+    computer_use: tuple[str, ...] = ()
 
     @property
     def done(self) -> bool:
         return self.status.strip().lower() == "done"
+
+    @property
+    def is_computer_use(self) -> bool:
+        return self.kind == COMPUTER_USE_KIND
+
+
+def _normalize_kind(raw: str, phase_id: str, title: str) -> str:
+    kind = raw.strip().lower().replace("-", "_").replace(" ", "_")
+    if kind in {COMPUTER_USE_KIND, "walkthrough", "verify"}:
+        return COMPUTER_USE_KIND
+    if _COMPUTER_USE_HINT.search(f"{phase_id} {title}"):
+        return COMPUTER_USE_KIND
+    return IMPLEMENT_KIND
+
+
+def is_computer_use_phase(phase: Phase) -> bool:
+    return phase.is_computer_use
+
+
+def ensure_computer_use_phase(phases: list[Phase]) -> list[Phase]:
+    """Append the default last computer-use phase when the plan omitted it."""
+    if any(phase.is_computer_use for phase in phases):
+        return phases
+    work = [phase for phase in phases if not phase.is_computer_use]
+    return [
+        *phases,
+        Phase(
+            id=COMPUTER_USE_PHASE_ID,
+            title="Computer-use walkthrough",
+            depends_on=tuple(phase.id for phase in work),
+            status="todo",
+            test_command="computer-use",
+            done_when=(
+                "End-to-end computer-use walkthrough recorded and linked "
+                "from the implement PR."
+            ),
+            kind=COMPUTER_USE_KIND,
+        ),
+    ]
 
 
 def parse_plan_json(raw: str) -> list[Phase]:
@@ -54,6 +101,13 @@ def parse_plan_json(raw: str) -> list[Phase]:
             deps = (depends,) if depends.strip() else ()
         else:
             deps = tuple(str(dep).strip() for dep in depends if str(dep).strip())
+        flows = item.get("computer_use") or item.get("flows") or []
+        if isinstance(flows, str):
+            computer_use = (flows,) if flows.strip() else ()
+        else:
+            computer_use = tuple(
+                str(flow).strip() for flow in flows if str(flow).strip()
+            )
         phases.append(
             Phase(
                 id=phase_id,
@@ -62,6 +116,8 @@ def parse_plan_json(raw: str) -> list[Phase]:
                 status=str(item.get("status") or "todo"),
                 test_command=str(item.get("test_command") or ""),
                 done_when=str(item.get("done_when") or ""),
+                kind=_normalize_kind(str(item.get("kind") or ""), phase_id, title),
+                computer_use=computer_use,
             )
         )
     return phases
@@ -205,4 +261,4 @@ def load_phases(url: str, branch: str) -> tuple[list[Phase], str]:
         return [], f"Invalid {PLAN_JSON_PATH}: {err}"
     if not phases:
         return [], f"{PLAN_JSON_PATH} has no phases."
-    return phases, ""
+    return ensure_computer_use_phase(phases), ""

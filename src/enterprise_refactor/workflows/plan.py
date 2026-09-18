@@ -92,10 +92,17 @@ what order.
 PLANNING RULES:
 - Phases are independently shippable, dependency-ordered, and small enough
   for Implement to finish one phase per loop.
-- Each phase has concrete subtasks (checkbox work items).
+- Each implement phase has concrete subtasks (checkbox work items).
 - Call out risk areas from the analysis that a phase must not break.
 - Subtasks should be specific enough that an implementer can execute them
   without re-discovering the system.
+- Every implement phase must list `test_command` (unit/integration) and
+  `computer_use` flows. Those flows are scripts for the LAST phase only,
+  after every `test_command` has passed. Do not plan mid-phase UI tests.
+- The LAST phase is always the default computer-use UI walkthrough. Do not
+  omit it. It is not application work. `kind` must be `computer_use`,
+  `id` should be `NN-computer-use` (highest NN), and `depends_on` must
+  list every earlier phase. No implement phase may come after it.
 
 OUTPUT
 
@@ -117,19 +124,38 @@ Also create `docs/refactor/phases/NN-<slug>.md` for every phase, including:
 - goal
 - evidence from current-state (files, flows, risks)
 - subtasks
+- `computer_use` flows (used only in the last UI phase, after unit tests)
 - `done_when`
 - `test_command`
 
+Write a last `docs/refactor/phases/NN-computer-use.md` for the walkthrough.
+
 Also create `docs/refactor/plan.json` as a list (or {{"phases": [...]}}) of
-Implement-compatible phase objects. Every phase must include:
+Implement-compatible phase objects. Every implement phase must include:
 
 {{
   "id": "01-...",
   "title": "...",
+  "kind": "implement",
   "depends_on": [],
   "subtasks": ["...", "..."],
   "test_command": "...",
+  "computer_use": ["open …", "exercise the flow this phase added (last UI phase)"],
   "done_when": "...",
+  "status": "todo"
+}}
+
+The final object must be the default computer-use phase:
+
+{{
+  "id": "0N-computer-use",
+  "title": "Computer-use walkthrough",
+  "kind": "computer_use",
+  "depends_on": ["01-...", "02-..."],
+  "subtasks": ["Confirm every earlier test_command passed", "Start the app", "Record walkthrough.mp4"],
+  "test_command": "computer-use",
+  "computer_use": ["end-to-end tour of every phase flow"],
+  "done_when": "End-to-end computer-use walkthrough recorded and linked from the implement PR.",
   "status": "todo"
 }}
 

@@ -33,8 +33,8 @@ Full-screen TUI. **↑↓** or **j/k** move, **1–5** jump, **enter** selects, 
 | Item | What happens |
 | --- | --- |
 | **Analyze** | Discovery-only map of the legacy system. Target repo is context only. Cloud agent pushes `refactor/analyze-YYYYMMDD` on the **legacy** repo (no PR) with `docs/modernization/CURRENT_STATE_ANALYSIS.md` and `docs/modernization/current-state.md`. |
-| **Plan** | Pick which **legacy** remote branch to read, then enter a modernization prompt. Agent checks out that branch, writes a phased plan on `refactor/plan-YYYYMMDD` on the **target** repo (`docs/refactor/plan.md`, `docs/refactor/plan.json`, `docs/refactor/phases/NN-<slug>.md`), and opens a PR on the target only. |
-| **Implement** | Pick a target **plan** or **implement** branch, then choose phases. Two turns on one agent: implement the chosen phases (check off, run `test_command`, push), then a computer-use walkthrough (`docs/refactor/walkthrough.mp4` + `walkthrough.md`, or screenshots under `docs/refactor/walkthrough/` if video is not possible). |
+| **Plan** | Pick which **legacy** remote branch to read, then enter a modernization prompt. Agent checks out that branch, writes a phased plan on `refactor/plan-YYYYMMDD` on the **target** repo (`docs/refactor/plan.md`, `docs/refactor/plan.json`, `docs/refactor/phases/NN-<slug>.md`), and opens a PR on the target only. Every plan ends with a default **computer-use** UI phase. Earlier phases list `test_command` plus `computer_use` flows for that last UI pass. |
+| **Implement** | Pick a target **plan** or **implement** branch, then choose phases. Each implement phase is coded, checked off, and unit-tested (`test_command`). Computer-use UI testing runs only as the last plan phase, after every unit test has passed (`docs/refactor/walkthrough.mp4` + PR). |
 | **Runs** | Read-only last agent IDs and branch names from `.refactor/state.json`. Enter or **q** returns. |
 | **Settings** | Session-only override of legacy repo, modern repo, or API key. Updates process env; **does not write `.env`**. Env name and model stay as started (use flags / `.env`). |
 
@@ -72,9 +72,11 @@ Then the CLI fetches `docs/refactor/plan.json` from that branch (`gh api`, then 
 
 - Done phases are checked and locked.
 - Pending phases start unchecked. **space** toggles a pending phase.
-- **Implement all remaining** (`a`) runs every phase that is not `done`, ignoring toggles.
-- **Implement selected** runs the toggled pending phases and any undone dependencies.
+- **Implement all remaining** (`a`) runs every phase that is not `done`: unit tests first, last-phase UI last.
+- **Implement selected** runs the toggled pending phases and any undone dependencies. UI computer-use runs only if that selection includes the last phase and all unit tests passed.
 - **esc** / Back returns to the branch list.
+
+The last plan phase is always computer-use. Existing `plan.json` files that omit it still get a virtual `99-computer-use` phase in the picker.
 
 If `plan.json` cannot be read, you can still choose **Implement all remaining** and the agent implements every undone phase on the branch.
 

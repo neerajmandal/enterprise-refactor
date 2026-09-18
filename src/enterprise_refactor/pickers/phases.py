@@ -26,6 +26,19 @@ from enterprise_refactor.ui.layout import (
     term_size,
 )
 
+
+def _selection_for(
+    phases: list[Phase], chosen: list[str], *, all_remaining: bool
+) -> PhaseSelection:
+    pending = {phase.id for phase in pending_phases(phases)}
+    ids = tuple(chosen)
+    if all_remaining:
+        return PhaseSelection(ids=ids, all_remaining=True)
+    return PhaseSelection(
+        ids=ids, all_remaining=bool(pending) and pending <= set(ids)
+    )
+
+
 FOOTER_PHASES: tuple[tuple[str, str], ...] = (
     ("↑↓", "navigate"),
     ("space", "toggle"),
@@ -37,6 +50,10 @@ FOOTER_PHASES: tuple[tuple[str, str], ...] = (
 
 
 def _phase_detail(phase: Phase, selected: bool) -> str:
+    if phase.is_computer_use:
+        if phase.done:
+            return "done"
+        return "UI last" if selected else "UI after unit tests"
     if phase.done:
         return "done"
     return "selected" if selected else "pending"
@@ -74,15 +91,13 @@ def render_phase_picker(
     for i, phase in enumerate(phases):
         if phase.done:
             icon = "✓"
-            title = phase.title
         else:
             icon = "☑" if phase.id in selected_ids else "☐"
-            title = phase.title
         body.append(
             paint_menu_row(
                 number=f"{i + 1}" if i < 9 else "",
                 icon=icon,
-                title=title,
+                title=phase.title,
                 detail=_phase_detail(phase, phase.id in selected_ids),
                 width=width,
                 selected=i == index,
@@ -100,7 +115,7 @@ def render_phase_picker(
             icon="▸",
             title="Implement all remaining",
             detail=(
-                "every pending phase"
+                "unit tests, then last-phase UI"
                 if all_enabled or (error and not phases)
                 else "nothing pending"
             ),
@@ -190,7 +205,7 @@ def choose_phases(
                 if not remaining:
                     hint = "Nothing pending to implement."
                     continue
-                return PhaseSelection(ids=tuple(remaining), all_remaining=True)
+                return _selection_for(phases, remaining, all_remaining=True)
             elif key == " ":
                 if index < len(phases) and not phases[index].done:
                     phase_id = phases[index].id
@@ -206,10 +221,10 @@ def choose_phases(
                         continue
                     if phase.id not in selected and not selected:
                         chosen = expand_dependencies(phases, [phase.id])
-                        return PhaseSelection(ids=tuple(chosen), all_remaining=False)
+                        return _selection_for(phases, chosen, all_remaining=False)
                     if selected:
                         chosen = expand_dependencies(phases, list(selected))
-                        return PhaseSelection(ids=tuple(chosen), all_remaining=False)
+                        return _selection_for(phases, chosen, all_remaining=False)
                     hint = "Toggle pending phases, or use Implement all remaining."
                     continue
                 if index == len(phases):
@@ -219,13 +234,13 @@ def choose_phases(
                     if not remaining:
                         hint = "Nothing pending to implement."
                         continue
-                    return PhaseSelection(ids=tuple(remaining), all_remaining=True)
+                    return _selection_for(phases, remaining, all_remaining=True)
                 if index == len(phases) + 1:
                     if not selected:
                         hint = "Toggle pending phases first."
                         continue
                     chosen = expand_dependencies(phases, list(selected))
-                    return PhaseSelection(ids=tuple(chosen), all_remaining=False)
+                    return _selection_for(phases, chosen, all_remaining=False)
                 return None
             elif key in {"back", "esc"}:
                 return None
@@ -254,9 +269,8 @@ def choose_phases_or_fallback(
                 raise SystemExit(
                     "Unknown --phases id(s): " + ", ".join(missing)
                 )
-            return PhaseSelection(
-                ids=tuple(expand_dependencies(phases, flagged)),
-                all_remaining=False,
+            return _selection_for(
+                phases, expand_dependencies(phases, flagged), all_remaining=False
             )
         return PhaseSelection(ids=tuple(flagged), all_remaining=False)
 
