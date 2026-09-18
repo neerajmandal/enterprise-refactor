@@ -2,6 +2,8 @@
 
 Interactive CLI that drives three Cursor Cloud Agent workflows: **Analyze**, **Plan**, and **Implement**. Each run starts a cloud agent in a named Cursor environment with **both** git repos checked out (legacy source and modern target).
 
+High-level diagrams: [docs/architecture.md](docs/architecture.md).
+
 ```bash
 uv sync
 uv run enterprise-refactor
