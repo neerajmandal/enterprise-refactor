@@ -6,8 +6,8 @@ import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from enterprise_refactor.ui.banner import WHITE, _c, clear_screen, paint_menu_row, print_home
-from enterprise_refactor.ui.keys import hide_cursor, read_key, show_cursor
+from enterprise_refactor.ui.input import hide_cursor, read_key, show_cursor
+from enterprise_refactor.ui.layout import WHITE, _c, clear_screen, paint_menu_row, print_home
 
 HOME_ITEMS: tuple[tuple[str, str, str, str, str], ...] = (
     ("analyze", "1", "⌕", "Analyze", "Understand the legacy codebase"),

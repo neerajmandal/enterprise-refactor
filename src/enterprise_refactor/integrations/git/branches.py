@@ -7,7 +7,7 @@ import shutil
 import subprocess
 from collections.abc import Sequence
 
-from enterprise_refactor.git.remotes import github_owner_repo, remote_url
+from enterprise_refactor.integrations.git.remotes import github_owner_repo, remote_url
 
 ANALYZE_PREFIX = "refactor/analyze-"
 PLAN_PREFIX = "refactor/plan-"

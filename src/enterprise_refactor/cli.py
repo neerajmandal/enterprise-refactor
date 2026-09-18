@@ -13,10 +13,10 @@ from enterprise_refactor.config import (
 )
 from enterprise_refactor.plan.selection import parse_phase_flag
 from enterprise_refactor.state import WorkflowState, load_state
-from enterprise_refactor.ui.banner import print_banner
-from enterprise_refactor.ui.home import choose_phase, leave_home_for_workflow, wait_for_menu
-from enterprise_refactor.ui.runs import show_runs
-from enterprise_refactor.ui.settings import edit_settings
+from enterprise_refactor.ui.layout import print_banner
+from enterprise_refactor.ui.screens.home import choose_phase, leave_home_for_workflow, wait_for_menu
+from enterprise_refactor.ui.screens.runs import show_runs
+from enterprise_refactor.ui.screens.settings import edit_settings
 from enterprise_refactor.workflows import analyze, implement, plan
 
 

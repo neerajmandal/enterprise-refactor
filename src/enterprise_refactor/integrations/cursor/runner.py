@@ -8,7 +8,7 @@ import time
 
 from cursor_sdk import Agent, RunResult
 
-from enterprise_refactor.cloud.feed import (
+from enterprise_refactor.integrations.cursor.events import (
     _SPINNER,
     _SPIN_INTERVAL,
     _clear_spinner_line,
@@ -16,8 +16,8 @@ from enterprise_refactor.cloud.feed import (
     write_live_feed,
     write_quiet_feed,
 )
-from enterprise_refactor.cloud.result import contains_refactor_result
-from enterprise_refactor.cloud.session import (
+from enterprise_refactor.integrations.cursor.results import contains_refactor_result
+from enterprise_refactor.integrations.cursor.session import (
     _ACTIVE_STATUSES,
     get_agent_dashboard_url,
 )

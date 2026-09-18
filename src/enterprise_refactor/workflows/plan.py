@@ -8,7 +8,7 @@ from datetime import date
 
 from cursor_sdk import CursorAgentError
 
-from enterprise_refactor.cloud import (
+from enterprise_refactor.integrations.cursor import (
     RunFailed,
     cloud_agent_session,
     extract_workflow_result,

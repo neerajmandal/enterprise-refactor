@@ -1,7 +1,7 @@
 """Cursor Cloud Agent session, prompt, and result helpers."""
 
-from enterprise_refactor.cloud.feed import write_live_feed, write_quiet_feed
-from enterprise_refactor.cloud.result import (
+from enterprise_refactor.integrations.cursor.events import write_live_feed, write_quiet_feed
+from enterprise_refactor.integrations.cursor.results import (
     WorkflowResult,
     contains_refactor_result,
     extract_workflow_result,
@@ -10,7 +10,7 @@ from enterprise_refactor.cloud.result import (
     normalize_repository_url,
     parse_refactor_result_block,
 )
-from enterprise_refactor.cloud.run import (
+from enterprise_refactor.integrations.cursor.runner import (
     RunFailed,
     get_cloud_run_snapshot,
     get_completed_run_result,
@@ -18,7 +18,7 @@ from enterprise_refactor.cloud.run import (
     recover_finished_run,
     run_agent_prompt,
 )
-from enterprise_refactor.cloud.session import (
+from enterprise_refactor.integrations.cursor.session import (
     build_cloud_agent_options,
     close_agent_if_idle,
     cloud_agent_session,

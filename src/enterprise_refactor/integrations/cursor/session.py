@@ -8,7 +8,7 @@ from contextlib import contextmanager
 
 from cursor_sdk import Agent, CloudAgentOptions, CloudRepository
 
-from enterprise_refactor.git.remotes import remote_url
+from enterprise_refactor.integrations.git.remotes import remote_url
 from enterprise_refactor.config import Config
 
 _ACTIVE_STATUSES = {"running", "creating"}

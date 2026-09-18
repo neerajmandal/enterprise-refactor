@@ -13,7 +13,8 @@ from enterprise_refactor.plan.document import (
     pending_phases,
 )
 from enterprise_refactor.plan.selection import PhaseSelection
-from enterprise_refactor.ui.banner import (
+from enterprise_refactor.ui.input import hide_cursor, read_key, show_cursor
+from enterprise_refactor.ui.layout import (
     DIM,
     MUTED,
     WHITE,
@@ -24,7 +25,6 @@ from enterprise_refactor.ui.banner import (
     repo_label,
     term_size,
 )
-from enterprise_refactor.ui.keys import hide_cursor, read_key, show_cursor
 
 FOOTER_PHASES: tuple[tuple[str, str], ...] = (
     ("↑↓", "navigate"),

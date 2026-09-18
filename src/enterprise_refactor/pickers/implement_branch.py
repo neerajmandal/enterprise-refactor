@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enterprise_refactor.config import Config
-from enterprise_refactor.git.branch_list import IMPLEMENT_PREFIX, PLAN_PREFIX
+from enterprise_refactor.integrations.git.branches import IMPLEMENT_PREFIX, PLAN_PREFIX
 from enterprise_refactor.pickers.analyze_branch import resolve_remote_branch
 from enterprise_refactor.state import WorkflowState
 

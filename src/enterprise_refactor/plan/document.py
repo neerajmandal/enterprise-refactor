@@ -10,7 +10,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 
-from enterprise_refactor.git.remotes import github_owner_repo, remote_url
+from enterprise_refactor.integrations.git.remotes import github_owner_repo, remote_url
 
 PLAN_JSON_PATH = "docs/refactor/plan.json"
 

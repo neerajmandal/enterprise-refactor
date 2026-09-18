@@ -6,8 +6,8 @@ import sys
 
 from enterprise_refactor.config import Config
 from enterprise_refactor.state import WorkflowState
-from enterprise_refactor.ui.banner import DIM, MUTED, WHITE, _c, print_screen, render_page
-from enterprise_refactor.ui.keys import hide_cursor, read_key, show_cursor
+from enterprise_refactor.ui.input import hide_cursor, read_key, show_cursor
+from enterprise_refactor.ui.layout import DIM, MUTED, WHITE, _c, print_screen, render_page
 
 
 def _row(label: str, value: str) -> str:

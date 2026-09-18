@@ -7,18 +7,18 @@ from datetime import date
 
 from cursor_sdk import CursorAgentError
 
-from enterprise_refactor.cloud import (
+from enterprise_refactor.integrations.cursor import (
     RunFailed,
     cloud_agent_session,
     extract_workflow_result,
     run_agent_prompt,
 )
 from enterprise_refactor.config import Config
-from enterprise_refactor.git.branch_list import IMPLEMENT_PREFIX
+from enterprise_refactor.integrations.git.branches import IMPLEMENT_PREFIX
 from enterprise_refactor.pickers.implement_branch import resolve_target_implement_branch
 from enterprise_refactor.pickers.phases import choose_phases_or_fallback
 from enterprise_refactor.plan.selection import PhaseSelection
-from enterprise_refactor.ui.home import leave_home_for_workflow
+from enterprise_refactor.ui.screens.home import leave_home_for_workflow
 from enterprise_refactor.state import WorkflowState, save_state
 
 

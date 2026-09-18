@@ -6,13 +6,14 @@ import sys
 from collections.abc import Sequence
 
 from enterprise_refactor.config import Config, ask, clean
-from enterprise_refactor.git.branch_list import (
+from enterprise_refactor.integrations.git.branches import (
     ANALYZE_PREFIX,
     default_branch_index,
     list_remote_branches,
 )
 from enterprise_refactor.state import WorkflowState
-from enterprise_refactor.ui.banner import (
+from enterprise_refactor.ui.input import hide_cursor, read_key, show_cursor
+from enterprise_refactor.ui.layout import (
     DIM,
     MUTED,
     WHITE,
@@ -23,7 +24,6 @@ from enterprise_refactor.ui.banner import (
     repo_label,
     term_size,
 )
-from enterprise_refactor.ui.keys import hide_cursor, read_key, show_cursor
 
 _MONTHS = (
     "Jan",
