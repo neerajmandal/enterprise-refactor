@@ -7,11 +7,11 @@ from datetime import date
 
 from cursor_sdk import CursorAgentError
 
-from enterprise_refactor.agent import (
+from enterprise_refactor.cloud import (
     RunFailed,
-    create_cloud_agent,
-    parsed_from_run,
-    send_and_stream,
+    cloud_agent_session,
+    extract_workflow_result,
+    run_agent_prompt,
 )
 from enterprise_refactor.branches import (
     IMPLEMENT_PREFIX,
@@ -206,7 +206,7 @@ def run(
         print("phases           all remaining", flush=True)
     print("workflow  Implement", flush=True)
     try:
-        with create_cloud_agent(
+        with cloud_agent_session(
             config,
             name=f"Implement {stamp}",
             legacy_ref=state.analyze_branch,
@@ -216,7 +216,7 @@ def run(
             state.implement_agent_id = agent.agent_id
             save_state(state)
             print("step  implement remaining phases", flush=True)
-            result = send_and_stream(
+            completed_run = run_agent_prompt(
                 agent,
                 _implement_prompt(
                     config,
@@ -227,14 +227,14 @@ def run(
                 ),
                 verbose=config.verbose,
             )
-            parsed = parsed_from_run(result, config)
-            _record_implement_branch(state, parsed.modern_branch, stamp)
+            workflow_result = extract_workflow_result(completed_run, config)
+            _record_implement_branch(state, workflow_result.modern_branch, stamp)
             print("step  computer-use walkthrough", flush=True)
-            video = send_and_stream(
+            completed_video_run = run_agent_prompt(
                 agent, _video_prompt(config, state), verbose=config.verbose
             )
-            parsed = parsed_from_run(video, config)
-            _record_implement_branch(state, parsed.modern_branch, stamp)
+            workflow_result = extract_workflow_result(completed_video_run, config)
+            _record_implement_branch(state, workflow_result.modern_branch, stamp)
     except CursorAgentError as err:
         print(
             f"startup failed: {err.message}, retryable={err.is_retryable}",

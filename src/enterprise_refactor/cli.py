@@ -107,7 +107,7 @@ def main(argv: list[str] | None = None) -> int:
         ready=config.ready,
     )
     if args.workflow:
-        code = _run_workflow(
+        code = dispatch_workflow(
             args.workflow,
             config,
             load_state(),
@@ -138,7 +138,7 @@ def main(argv: list[str] | None = None) -> int:
             continue
         if workflow not in {"plan", "implement"}:
             leave_home_for_workflow()
-        last = _run_workflow(
+        last = dispatch_workflow(
             workflow,
             config,
             load_state(),
@@ -152,7 +152,7 @@ def main(argv: list[str] | None = None) -> int:
         index = {"analyze": 1, "plan": 2, "implement": 2}.get(workflow, 0)
 
 
-def _run_workflow(
+def dispatch_workflow(
     workflow: str,
     config: Config,
     state: WorkflowState,
@@ -162,7 +162,7 @@ def _run_workflow(
     phases: list[str] | None,
 ) -> int | None:
     if workflow == "analyze":
-        return analyze.run(config, state)
+        return analyze.run_analysis_workflow(config, state)
     if workflow == "plan":
         return plan.run(
             config, state, prompt=prompt, analyze_branch=analyze_branch

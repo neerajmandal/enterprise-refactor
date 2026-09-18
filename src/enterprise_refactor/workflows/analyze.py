@@ -7,17 +7,17 @@ from datetime import date
 
 from cursor_sdk import CursorAgentError
 
-from enterprise_refactor.agent import (
+from enterprise_refactor.cloud import (
     RunFailed,
-    create_cloud_agent,
-    parsed_from_run,
-    send_and_stream,
+    cloud_agent_session,
+    extract_workflow_result,
+    run_agent_prompt,
 )
 from enterprise_refactor.config import Config
 from enterprise_refactor.state import WorkflowState, save_state
 
 
-def _prompt(config: Config, stamp: str) -> str:
+def build_analysis_prompt(config: Config, stamp: str) -> str:
     return f"""You are running the Analyze workflow of an enterprise refactor.
 
 The cloud environment already has both repositories checked out:
@@ -209,11 +209,11 @@ artifacts: docs/modernization/CURRENT_STATE_ANALYSIS.md, docs/modernization/curr
 """
 
 
-def run(config: Config, state: WorkflowState) -> int:
+def run_analysis_workflow(config: Config, state: WorkflowState) -> int:
     stamp = date.today().strftime("%Y%m%d")
     print("workflow  Analyze", flush=True)
     try:
-        with create_cloud_agent(
+        with cloud_agent_session(
             config,
             name=f"Analyze {stamp}",
             legacy_ref=config.legacy_ref,
@@ -221,8 +221,8 @@ def run(config: Config, state: WorkflowState) -> int:
         ) as agent:
             state.analyze_agent_id = agent.agent_id
             save_state(state)
-            result = send_and_stream(
-                agent, _prompt(config, stamp), verbose=config.verbose
+            completed_run = run_agent_prompt(
+                agent, build_analysis_prompt(config, stamp), verbose=config.verbose
             )
     except CursorAgentError as err:
         print(
@@ -234,13 +234,13 @@ def run(config: Config, state: WorkflowState) -> int:
         print(f"run failed: {err.run_id}", file=sys.stderr)
         return 2
 
-    parsed = parsed_from_run(result, config)
-    if parsed.legacy_branch:
-        state.analyze_branch = parsed.legacy_branch
+    workflow_result = extract_workflow_result(completed_run, config)
+    if workflow_result.legacy_branch:
+        state.analyze_branch = workflow_result.legacy_branch
     elif not state.analyze_branch:
         state.analyze_branch = f"refactor/analyze-{stamp}"
     save_state(state)
     print(f"analyze branch  {state.analyze_branch}", flush=True)
-    if parsed.artifacts:
-        print(f"artifacts       {parsed.artifacts}", flush=True)
+    if workflow_result.artifacts:
+        print(f"artifacts       {workflow_result.artifacts}", flush=True)
     return 0

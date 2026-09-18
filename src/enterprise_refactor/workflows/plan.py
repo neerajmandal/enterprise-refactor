@@ -8,11 +8,11 @@ from datetime import date
 
 from cursor_sdk import CursorAgentError
 
-from enterprise_refactor.agent import (
+from enterprise_refactor.cloud import (
     RunFailed,
-    create_cloud_agent,
-    parsed_from_run,
-    send_and_stream,
+    cloud_agent_session,
+    extract_workflow_result,
+    run_agent_prompt,
 )
 from enterprise_refactor.branches import resolve_legacy_plan_branch
 from enterprise_refactor.config import Config, ask, clean
@@ -168,7 +168,7 @@ def run(
     print(f"analyze branch  {state.analyze_branch}", flush=True)
     print("workflow  Plan", flush=True)
     try:
-        with create_cloud_agent(
+        with cloud_agent_session(
             config,
             name=f"Plan {stamp}",
             legacy_ref=state.analyze_branch,
@@ -177,7 +177,7 @@ def run(
         ) as agent:
             state.plan_agent_id = agent.agent_id
             save_state(state)
-            result = send_and_stream(
+            completed_run = run_agent_prompt(
                 agent,
                 _prompt(config, state, stamp, modernization_ask),
                 verbose=config.verbose,
@@ -192,15 +192,15 @@ def run(
         print(f"run failed: {err.run_id}", file=sys.stderr)
         return 2
 
-    parsed = parsed_from_run(result, config)
-    if parsed.modern_branch:
-        state.plan_branch = parsed.modern_branch
+    workflow_result = extract_workflow_result(completed_run, config)
+    if workflow_result.modern_branch:
+        state.plan_branch = workflow_result.modern_branch
     elif not state.plan_branch:
         state.plan_branch = f"refactor/plan-{stamp}"
     save_state(state)
     print(f"plan branch  {state.plan_branch}", flush=True)
-    if parsed.artifacts:
-        print(f"artifacts    {parsed.artifacts}", flush=True)
-    if parsed.pr_url:
-        print(f"plan pr      {parsed.pr_url}", flush=True)
+    if workflow_result.artifacts:
+        print(f"artifacts    {workflow_result.artifacts}", flush=True)
+    if workflow_result.pr_url:
+        print(f"plan pr      {workflow_result.pr_url}", flush=True)
     return 0
