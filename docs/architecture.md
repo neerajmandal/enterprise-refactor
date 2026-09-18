@@ -1,21 +1,28 @@
 # Workflows
 
-Analyze, Plan, and Implement. Each step starts a cloud agent with both repos checked out. Artifacts land on a dated `refactor/*` branch.
+Each workflow starts a cloud agent with both repositories. Artifacts land on a dated `refactor/*` branch.
 
 ```mermaid
 flowchart TB
-    analyze[Analyze] --> analyzeOut["Legacy branch: refactor/analyze-YYYYMMDD<br/>docs/modernization/*<br/>no PR"]
+    start[CLI start] --> resolve[Resolve config]
+    resolve --> menu{Menu or named workflow}
+    menu --> analyze[Analyze]
+    menu --> plan[Plan]
+    menu --> implement[Implement]
+    menu --> runs[Runs]
+    menu --> settings[Settings]
 
-    analyzeOut --> plan[Plan]
-    plan --> pickAnalyze[Pick a legacy analyze branch]
-    pickAnalyze --> planOut["Target branch: refactor/plan-YYYYMMDD<br/>docs/refactor/plan.md, plan.json, phases<br/>PR on target"]
+    analyze --> analyzeAgent[Cloud agent on both repos]
+    analyzeAgent --> analyzeOut["Legacy: refactor/analyze-YYYYMMDD<br/>docs/modernization/*"]
 
-    planOut --> implement[Implement]
-    implement --> pickPlan[Pick a target plan or implement branch]
+    plan --> pickAnalyze[Pick legacy analyze branch]
+    pickAnalyze --> planAgent[Cloud agent]
+    planAgent --> planOut["Target: refactor/plan-YYYYMMDD<br/>docs/refactor/plan.md + plan.json + phases<br/>PR on target"]
+
+    implement --> pickPlan[Pick target plan or implement branch]
     pickPlan --> pickPhases[Pick pending phases]
-    pickPhases --> implOut["Target branch: refactor/implement-YYYYMMDD<br/>code + unit tests<br/>last phase: computer-use walkthrough"]
+    pickPhases --> implAgent[Cloud agent]
+    implAgent --> implOut["Target: refactor/implement-YYYYMMDD<br/>code + unit tests<br/>last phase: computer-use walkthrough"]
 ```
 
-- **Analyze** maps the legacy system. Target repo is context only.
-- **Plan** reads that analyze branch and writes a phased plan on the target repo.
-- **Implement** codes selected phases on the target. Unit tests run first; computer-use UI testing is only the last phase.
+Analyze writes discovery docs on the **legacy** repo and does not open a PR. Plan and Implement write on the **target** repo; Plan opens a PR. Implement runs `test_command` per selected unit-test phase and runs computer-use UI checks only as the last plan phase.
