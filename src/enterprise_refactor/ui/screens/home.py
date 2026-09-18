@@ -7,7 +7,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from enterprise_refactor.ui.input import hide_cursor, read_key, show_cursor
-from enterprise_refactor.ui.layout import WHITE, _c, clear_screen, paint_menu_row, print_home
+from enterprise_refactor.ui.layout import WHITE, _c, paint_menu_row, pin_banner, print_home
 
 HOME_ITEMS: tuple[tuple[str, str, str, str, str], ...] = (
     ("analyze", "1", "⌕", "Analyze", "Understand the legacy codebase"),
@@ -85,8 +85,6 @@ def choose_item(
             elif numbered and key in {str(i) for i in range(1, numbered + 1)}:
                 index = int(key) - 1
             elif key == "enter":
-                sys.stdout.write("\n")
-                sys.stdout.flush()
                 return rows[index].id
             elif key in {"back", "esc"} and any(row.id == "back" for row in rows):
                 return "back"
@@ -104,8 +102,8 @@ def choose_item(
 
 
 def leave_home_for_workflow() -> None:
-    """Drop the TUI so Analyze / Plan / Implement logs are the only thing on screen."""
-    clear_screen()
+    """Keep the banner pinned so Analyze / Plan / Implement logs scroll under it."""
+    pin_banner()
 
 
 def wait_for_menu() -> None:

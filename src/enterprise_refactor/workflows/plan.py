@@ -15,11 +15,15 @@ from enterprise_refactor.integrations.cursor import (
     run_agent_prompt,
 )
 from enterprise_refactor.pickers.analyze_branch import resolve_legacy_plan_branch
-from enterprise_refactor.config import Config, ask, clean
+from enterprise_refactor.config import Config, clean
 from enterprise_refactor.state import WorkflowState, save_state
+from enterprise_refactor.ui.screens.home import leave_home_for_workflow
+from enterprise_refactor.ui.text import ask_long_text
 
 
-def resolve_modernization_ask(prompt_arg: str | None) -> str:
+def resolve_modernization_ask(
+    config: Config, prompt_arg: str | None
+) -> str | None:
     value = clean(prompt_arg or os.environ.get("CURSOR_PLAN_PROMPT") or "")
     if value:
         return value
@@ -28,7 +32,9 @@ def resolve_modernization_ask(prompt_arg: str | None) -> str:
             "Modernization prompt is missing. Pass --prompt, set "
             "CURSOR_PLAN_PROMPT, or run this command in a terminal."
         )
-    return ask("Modernization prompt")
+    return ask_long_text(
+        config, title="Plan", label="Modernization prompt"
+    )
 
 
 def _prompt(
@@ -189,8 +195,11 @@ def run(
     state.analyze_branch = analyze_ref
     save_state(state)
 
-    modernization_ask = resolve_modernization_ask(prompt)
+    modernization_ask = resolve_modernization_ask(config, prompt)
+    if not modernization_ask:
+        return None
     stamp = date.today().strftime("%Y%m%d")
+    leave_home_for_workflow()
     print(f"analyze branch  {state.analyze_branch}", flush=True)
     print("workflow  Plan", flush=True)
     try:

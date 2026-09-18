@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import atexit
 import os
 import re
 import shutil
@@ -168,6 +169,9 @@ def _meta_row(label: str, value: str, width: int) -> str:
     return line + " " * pad
 
 
+_header_ctx: dict[str, str] = {}
+
+
 def header_lines(
     *,
     width: int,
@@ -176,8 +180,15 @@ def header_lines(
     cursor_env: str,
     model: str,
 ) -> list[str]:
+    global _header_ctx
     env_name = cursor_env.strip() or "(unset)"
     model_name = model.strip() or "(unset)"
+    _header_ctx = {
+        "legacy_repo": legacy_repo,
+        "modern_repo": modern_repo,
+        "cursor_env": cursor_env,
+        "model": model,
+    }
     source = repo_label(legacy_repo) if legacy_repo.strip() else "(not connected)"
     target = repo_label(modern_repo) if modern_repo.strip() else "(not connected)"
 
@@ -354,14 +365,73 @@ def render_page(
     )
 
 
+_in_tui = False
+
+
+def enter_tui() -> None:
+    """Draw menus on the alternate screen so frames do not stack in scrollback."""
+    global _in_tui
+    if _in_tui or not sys.stdout.isatty():
+        return
+    sys.stdout.write("\033[?1049h")
+    sys.stdout.flush()
+    _in_tui = True
+
+
+def _reset_scroll_region() -> None:
+    sys.stdout.write("\033[r")
+
+
+def leave_tui() -> None:
+    """Return to the main screen for workflow logs."""
+    global _in_tui
+    if not _in_tui:
+        return
+    _reset_scroll_region()
+    sys.stdout.write("\033[?1049l")
+    sys.stdout.flush()
+    _in_tui = False
+
+
+atexit.register(leave_tui)
+
+
 def clear_screen() -> None:
-    sys.stdout.write("\033[2J\033[H")
+    _reset_scroll_region()
+    sys.stdout.write("\033[H\033[2J")
     sys.stdout.flush()
 
 
 def print_screen(text: str) -> None:
-    clear_screen()
-    sys.stdout.write(text)
+    enter_tui()
+    # Home + erase: replace the current frame. Do not use a scroll-clear
+    # that copies the previous banner into scrollback, and do not emit an
+    # extra trailing newline that would push the banner up one row.
+    _, height = term_size()
+    lines = text.splitlines()[:height]
+    _reset_scroll_region()
+    sys.stdout.write("\033[H\033[J")
+    sys.stdout.write("\r\n".join(lines))
+    sys.stdout.flush()
+
+
+def pin_banner() -> None:
+    """Keep the home banner on screen; later prints scroll beneath it."""
+    if not sys.stdout.isatty() or not _header_ctx:
+        leave_tui()
+        return
+    enter_tui()
+    width, height = term_size()
+    header = header_lines(width=width, **_header_ctx)
+    _reset_scroll_region()
+    sys.stdout.write("\033[H\033[2J")
+    sys.stdout.write("\r\n".join(header))
+    top = min(len(header) + 1, height)
+    if top < height:
+        sys.stdout.write(f"\033[{top};{height}r")
+        sys.stdout.write(f"\033[{top};1H")
+    else:
+        sys.stdout.write(f"\033[{height};1H")
     sys.stdout.flush()
 
 
