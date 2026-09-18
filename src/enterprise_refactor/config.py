@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from getpass import getpass
 from pathlib import Path
 
-from enterprise_refactor.banner import print_banner
+from enterprise_refactor.ui.banner import print_banner
 
 ENV_PATH = Path(".env")
 DEFAULT_REF = "main"

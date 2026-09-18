@@ -1,15 +1,18 @@
-"""List and resolve remote git branches for Plan and Implement."""
+"""TUI to pick the legacy analyze branch Plan will read."""
 
 from __future__ import annotations
 
-import os
-import shutil
-import subprocess
 import sys
 from collections.abc import Sequence
-from urllib.parse import urlparse
 
-from enterprise_refactor.banner import (
+from enterprise_refactor.config import Config, ask, clean
+from enterprise_refactor.git.branch_list import (
+    ANALYZE_PREFIX,
+    default_branch_index,
+    list_remote_branches,
+)
+from enterprise_refactor.state import WorkflowState
+from enterprise_refactor.ui.banner import (
     DIM,
     MUTED,
     WHITE,
@@ -20,158 +23,7 @@ from enterprise_refactor.banner import (
     repo_label,
     term_size,
 )
-from enterprise_refactor.config import Config, ask, clean
-from enterprise_refactor.menu import _hide_cursor, _read_key, _show_cursor
-from enterprise_refactor.state import WorkflowState
-
-ANALYZE_PREFIX = "refactor/analyze-"
-PLAN_PREFIX = "refactor/plan-"
-IMPLEMENT_PREFIX = "refactor/implement-"
-
-
-def github_owner_repo(url: str) -> tuple[str, str] | None:
-    raw = (url or "").strip()
-    if raw.endswith(".git"):
-        raw = raw[:-4]
-    if raw.startswith("git@"):
-        path = raw.split(":", 1)[-1]
-    elif "://" in raw:
-        path = urlparse(raw).path.strip("/")
-    else:
-        path = raw
-    parts = [part for part in path.split("/") if part]
-    if len(parts) >= 2:
-        return parts[-2], parts[-1]
-    return None
-
-
-def remote_url(url: str) -> str:
-    value = (url or "").strip()
-    if value.startswith(("http://", "https://", "git@")):
-        return value
-    owner_repo = github_owner_repo(value)
-    if owner_repo is None:
-        return value
-    owner, repo = owner_repo
-    return f"https://github.com/{owner}/{repo}.git"
-
-
-def _run(command: list[str], *, env: dict[str, str] | None = None) -> str | None:
-    try:
-        completed = subprocess.run(
-            command,
-            check=False,
-            capture_output=True,
-            text=True,
-            env=env,
-        )
-    except OSError:
-        return None
-    if completed.returncode != 0:
-        return None
-    return completed.stdout
-
-
-def _branches_from_gh(url: str) -> list[str] | None:
-    owner_repo = github_owner_repo(url)
-    if owner_repo is None or shutil.which("gh") is None:
-        return None
-    owner, repo = owner_repo
-    output = _run(
-        [
-            "gh",
-            "api",
-            "--paginate",
-            "-q",
-            ".[].name",
-            f"repos/{owner}/{repo}/branches?per_page=100",
-        ]
-    )
-    if output is None:
-        return None
-    names = [line.strip() for line in output.splitlines() if line.strip()]
-    return names or None
-
-
-def _branches_from_ls_remote(url: str) -> list[str] | None:
-    if shutil.which("git") is None:
-        return None
-    env = os.environ.copy()
-    env["GIT_TERMINAL_PROMPT"] = "0"
-    output = _run(
-        ["git", "ls-remote", "--heads", remote_url(url)],
-        env=env,
-    )
-    if output is None:
-        return None
-    names: list[str] = []
-    prefix = "refs/heads/"
-    for line in output.splitlines():
-        parts = line.split()
-        if len(parts) < 2 or not parts[-1].startswith(prefix):
-            continue
-        names.append(parts[-1][len(prefix) :])
-    return names or None
-
-
-def _prefix_list(preferred_prefixes: str | Sequence[str]) -> tuple[str, ...]:
-    if isinstance(preferred_prefixes, str):
-        return (preferred_prefixes,)
-    return tuple(preferred_prefixes)
-
-
-def sort_branch_names(
-    names: list[str], *, preferred_prefix: str | Sequence[str]
-) -> list[str]:
-    prefixes = _prefix_list(preferred_prefix)
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for prefix in prefixes:
-        group = sorted(
-            (name for name in names if name.startswith(prefix) and name not in seen),
-            reverse=True,
-        )
-        ordered.extend(group)
-        seen.update(group)
-    rest = sorted(name for name in names if name not in seen)
-    return ordered + rest
-
-
-def list_remote_branches(
-    url: str, *, preferred_prefix: str | Sequence[str]
-) -> tuple[list[str], str]:
-    seen: set[str] = set()
-    names: list[str] = []
-    for group in (_branches_from_ls_remote(url), _branches_from_gh(url)):
-        for name in group or ():
-            if name not in seen:
-                seen.add(name)
-                names.append(name)
-    if names:
-        return sort_branch_names(names, preferred_prefix=preferred_prefix), ""
-    return [], "Could not list remote branches."
-
-
-def default_branch_index(
-    names: list[str],
-    *,
-    preferred_prefix: str | Sequence[str],
-    saved: str,
-    fallback: str,
-) -> int:
-    prefixes = _prefix_list(preferred_prefix)
-    for prefix in prefixes:
-        preferred = [name for name in names if name.startswith(prefix)]
-        if preferred:
-            return names.index(preferred[0])
-    if saved and saved in names:
-        return names.index(saved)
-    if fallback and fallback in names:
-        return names.index(fallback)
-    if "main" in names:
-        return names.index("main")
-    return 0
-
+from enterprise_refactor.ui.keys import hide_cursor, read_key, show_cursor
 
 _MONTHS = (
     "Jan",
@@ -367,7 +219,7 @@ def choose_remote_branch(
 ) -> str | None:
     total = len(names) + 1
     index = index % total
-    _hide_cursor()
+    hide_cursor()
     try:
         while True:
             print_screen(
@@ -388,7 +240,7 @@ def choose_remote_branch(
                     preferred_kinds=preferred_kinds,
                 )
             )
-            key = _read_key()
+            key = read_key()
             if key == "up":
                 index = (index - 1) % total
             elif key == "down":
@@ -405,7 +257,7 @@ def choose_remote_branch(
         sys.stdout.write("\n")
         raise
     finally:
-        _show_cursor()
+        show_cursor()
 
 
 def resolve_remote_branch(
@@ -512,34 +364,5 @@ def resolve_legacy_plan_branch(
         missing_hint=(
             "Pass --analyze-branch or run this command in a terminal "
             "to pick a legacy branch."
-        ),
-    )
-
-
-def resolve_target_implement_branch(
-    config: Config,
-    state: WorkflowState,
-    *,
-    plan_branch: str | None,
-) -> str | None:
-    return resolve_remote_branch(
-        config,
-        title="Implement",
-        subtitle="Choose the target branch Implement will fetch and work on.",
-        repo_url=config.modern_repo,
-        preferred_prefix=IMPLEMENT_PREFIX,
-        preferred_label="Implement",
-        kind_badge="implement",
-        saved=state.implement_branch or state.plan_branch,
-        fallback=config.modern_ref,
-        flagged=plan_branch,
-        ask_label="Target branch",
-        missing_hint=(
-            "Pass --plan-branch or run this command in a terminal "
-            "to pick a target branch."
-        ),
-        preferred_kinds=(
-            (IMPLEMENT_PREFIX, "Implement", "implement"),
-            (PLAN_PREFIX, "Plan", "plan"),
         ),
     )

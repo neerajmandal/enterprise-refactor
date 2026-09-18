@@ -14,7 +14,7 @@ from enterprise_refactor.cloud import (
     extract_workflow_result,
     run_agent_prompt,
 )
-from enterprise_refactor.branches import resolve_legacy_plan_branch
+from enterprise_refactor.pickers.analyze_branch import resolve_legacy_plan_branch
 from enterprise_refactor.config import Config, ask, clean
 from enterprise_refactor.state import WorkflowState, save_state
 

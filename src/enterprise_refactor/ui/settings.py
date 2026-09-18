@@ -5,15 +5,15 @@ from __future__ import annotations
 import sys
 from getpass import getpass
 
-from enterprise_refactor.banner import (
+from enterprise_refactor.config import Config, apply_session, clean, is_repo
+from enterprise_refactor.ui.banner import (
     paint_menu_row,
     print_screen,
     render_page,
     repo_label,
     term_size,
 )
-from enterprise_refactor.config import Config, apply_session, clean, is_repo
-from enterprise_refactor.menu import MenuRow, choose_item
+from enterprise_refactor.ui.home import MenuRow, choose_item
 
 FIELDS: tuple[tuple[str, str, str, str], ...] = (
     ("legacy_repo", "1", "Legacy repo", "source git URL or owner/repo"),

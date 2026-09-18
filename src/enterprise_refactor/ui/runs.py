@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import sys
 
-from enterprise_refactor.banner import DIM, MUTED, WHITE, _c, print_screen, render_page
 from enterprise_refactor.config import Config
-from enterprise_refactor.menu import _hide_cursor, _read_key, _show_cursor
 from enterprise_refactor.state import WorkflowState
+from enterprise_refactor.ui.banner import DIM, MUTED, WHITE, _c, print_screen, render_page
+from enterprise_refactor.ui.keys import hide_cursor, read_key, show_cursor
 
 
 def _row(label: str, value: str) -> str:
@@ -43,13 +43,13 @@ def show_runs(config: Config, state: WorkflowState) -> None:
             body=body,
         )
     )
-    _hide_cursor()
+    hide_cursor()
     try:
         while True:
-            key = _read_key()
+            key = read_key()
             if key in {"enter", "quit", "esc", "back"}:
                 return
     except KeyboardInterrupt:
         return
     finally:
-        _show_cursor()
+        show_cursor()

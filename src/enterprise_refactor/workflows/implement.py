@@ -13,13 +13,12 @@ from enterprise_refactor.cloud import (
     extract_workflow_result,
     run_agent_prompt,
 )
-from enterprise_refactor.branches import (
-    IMPLEMENT_PREFIX,
-    resolve_target_implement_branch,
-)
 from enterprise_refactor.config import Config
-from enterprise_refactor.menu import leave_home_for_workflow
-from enterprise_refactor.phases import PhaseSelection, choose_phases_or_fallback
+from enterprise_refactor.git.branch_list import IMPLEMENT_PREFIX
+from enterprise_refactor.pickers.implement_branch import resolve_target_implement_branch
+from enterprise_refactor.pickers.phases import choose_phases_or_fallback
+from enterprise_refactor.plan.selection import PhaseSelection
+from enterprise_refactor.ui.home import leave_home_for_workflow
 from enterprise_refactor.state import WorkflowState, save_state
 
 
