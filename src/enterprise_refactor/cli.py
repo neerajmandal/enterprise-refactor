@@ -102,7 +102,6 @@ def main(argv: list[str] | None = None) -> int:
     print_banner(
         legacy_repo=config.legacy_repo,
         modern_repo=config.modern_repo,
-        cursor_env=config.cursor_env,
         model=config.model,
         ready=config.ready,
     )
@@ -124,7 +123,6 @@ def main(argv: list[str] | None = None) -> int:
         workflow = choose_phase(
             legacy_repo=config.legacy_repo,
             modern_repo=config.modern_repo,
-            cursor_env=config.cursor_env,
             model=config.model,
             index=index,
         )

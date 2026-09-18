@@ -21,8 +21,9 @@ def build_cloud_agent_options(
     modern_ref: str,
     auto_create_pr: bool = False,
 ) -> CloudAgentOptions:
-    # Named cloud environments cannot be combined with explicit repos.
-    # This CLI always needs both repos and starting refs, so skip env.name.
+    # Official Cloud Agents API: a named Cursor-hosted environment
+    # (env.type=cloud + env.name) is mutually exclusive with explicit repos.
+    # This CLI needs both repos and starting refs, so it cannot send env.name.
     return CloudAgentOptions(
         repos=[
             CloudRepository(

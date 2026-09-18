@@ -177,16 +177,13 @@ def header_lines(
     width: int,
     legacy_repo: str,
     modern_repo: str,
-    cursor_env: str,
     model: str,
 ) -> list[str]:
     global _header_ctx
-    env_name = cursor_env.strip() or "(unset)"
     model_name = model.strip() or "(unset)"
     _header_ctx = {
         "legacy_repo": legacy_repo,
         "modern_repo": modern_repo,
-        "cursor_env": cursor_env,
         "model": model,
     }
     source = repo_label(legacy_repo) if legacy_repo.strip() else "(not connected)"
@@ -221,7 +218,6 @@ def header_lines(
         "",
         _rule(width),
         "",
-        _meta_row("Environment", env_name, width),
         _meta_row("Model", model_name, width),
         _meta_row("Source repo", source, width),
         _meta_row("Target repo", target, width),
@@ -292,7 +288,6 @@ def render(
     *,
     legacy_repo: str,
     modern_repo: str,
-    cursor_env: str,
     model: str,
     ready: bool,
 ) -> str:
@@ -301,7 +296,6 @@ def render(
         width=width,
         legacy_repo=legacy_repo,
         modern_repo=modern_repo,
-        cursor_env=cursor_env,
         model=model,
     )
     if ready:
@@ -315,7 +309,6 @@ def render_home(
     *,
     legacy_repo: str,
     modern_repo: str,
-    cursor_env: str,
     model: str,
     menu_rows: list[tuple[str, str, str, str]],
     selected: int,
@@ -325,7 +318,6 @@ def render_home(
         width=width,
         legacy_repo=legacy_repo,
         modern_repo=modern_repo,
-        cursor_env=cursor_env,
         model=model,
     )
     for i, (number, icon, title, detail) in enumerate(menu_rows):
@@ -346,7 +338,6 @@ def render_page(
     *,
     legacy_repo: str,
     modern_repo: str,
-    cursor_env: str,
     model: str,
     body: list[str],
     footer_actions: tuple[tuple[str, str], ...] = FOOTER_PAGE,
@@ -356,7 +347,6 @@ def render_page(
         width=width,
         legacy_repo=legacy_repo,
         modern_repo=modern_repo,
-        cursor_env=cursor_env,
         model=model,
     )
     lines.extend(body)

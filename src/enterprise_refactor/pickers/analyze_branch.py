@@ -116,7 +116,6 @@ def render_branch_picker(
     *,
     legacy_repo: str,
     modern_repo: str,
-    cursor_env: str,
     model: str,
     title: str,
     subtitle: str,
@@ -197,7 +196,6 @@ def render_branch_picker(
     return render_page(
         legacy_repo=legacy_repo,
         modern_repo=modern_repo,
-        cursor_env=cursor_env,
         model=model,
         body=body,
     )
@@ -226,7 +224,6 @@ def choose_remote_branch(
                 render_branch_picker(
                     legacy_repo=config.legacy_repo,
                     modern_repo=config.modern_repo,
-                    cursor_env=config.cursor_env,
                     model=config.model,
                     title=title,
                     subtitle=subtitle,
@@ -291,7 +288,6 @@ def resolve_remote_branch(
         render_page(
             legacy_repo=config.legacy_repo,
             modern_repo=config.modern_repo,
-            cursor_env=config.cursor_env,
             model=config.model,
             body=[
                 _c(WHITE, f"  {title}"),
@@ -308,7 +304,6 @@ def resolve_remote_branch(
                 render_page(
                     legacy_repo=config.legacy_repo,
                     modern_repo=config.modern_repo,
-                    cursor_env=config.cursor_env,
                     model=config.model,
                     body=[
                         _c(WHITE, f"  {title}"),

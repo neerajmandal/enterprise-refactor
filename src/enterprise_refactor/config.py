@@ -141,7 +141,6 @@ def resolve_config(args: argparse.Namespace) -> Config:
         print_banner(
             legacy_repo=legacy_repo,
             modern_repo=modern_repo,
-            cursor_env=cursor_env,
             model=model,
             ready=False,
         )

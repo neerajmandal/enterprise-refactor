@@ -128,7 +128,6 @@ def choose_phase(
     *,
     legacy_repo: str,
     modern_repo: str,
-    cursor_env: str,
     model: str,
     index: int = 0,
 ) -> str:
@@ -152,7 +151,6 @@ def choose_phase(
         print_home(
             legacy_repo=legacy_repo,
             modern_repo=modern_repo,
-            cursor_env=cursor_env,
             model=model,
             menu_rows=menu_rows,
             selected=selected,

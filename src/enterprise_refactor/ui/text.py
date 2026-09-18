@@ -79,7 +79,6 @@ def ask_long_text(
                     render_page(
                         legacy_repo=config.legacy_repo,
                         modern_repo=config.modern_repo,
-                        cursor_env=config.cursor_env,
                         model=config.model,
                         body=body,
                         footer_actions=FOOTER_EDIT,
