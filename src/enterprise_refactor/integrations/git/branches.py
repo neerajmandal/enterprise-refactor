@@ -6,12 +6,34 @@ import os
 import shutil
 import subprocess
 from collections.abc import Sequence
+from datetime import datetime
 
 from enterprise_refactor.integrations.git.remotes import github_owner_repo, remote_url
 
 ANALYZE_PREFIX = "refactor/analyze-"
 PLAN_PREFIX = "refactor/plan-"
 IMPLEMENT_PREFIX = "refactor/implement-"
+
+REFACTOR_STAMP_FORMAT = "%Y%m%d-%H%M%S"
+
+
+def format_refactor_stamp(*, when: datetime | None = None) -> str:
+    return (when or datetime.now()).strftime(REFACTOR_STAMP_FORMAT)
+
+
+def allocate_refactor_stamp(
+    url: str, branch_prefix: str, *, when: datetime | None = None
+) -> str:
+    """Pick a stamp so ``branch_prefix + stamp`` is not already on the remote."""
+    base = format_refactor_stamp(when=when)
+    names, _ = list_remote_branches(url, preferred_prefix=branch_prefix)
+    existing = set(names)
+    stamp = base
+    suffix = 2
+    while f"{branch_prefix}{stamp}" in existing:
+        stamp = f"{base}-{suffix}"
+        suffix += 1
+    return stamp
 
 
 def _run(command: list[str], *, env: dict[str, str] | None = None) -> str | None:

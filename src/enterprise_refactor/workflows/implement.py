@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sys
-from datetime import date
 
 from cursor_sdk import CursorAgentError
 
@@ -14,7 +13,10 @@ from enterprise_refactor.integrations.cursor import (
     run_agent_prompt,
 )
 from enterprise_refactor.config import Config
-from enterprise_refactor.integrations.git.branches import IMPLEMENT_PREFIX
+from enterprise_refactor.integrations.git.branches import (
+    IMPLEMENT_PREFIX,
+    allocate_refactor_stamp,
+)
 from enterprise_refactor.pickers.implement_branch import resolve_target_implement_branch
 from enterprise_refactor.pickers.phases import choose_phases_or_fallback
 from enterprise_refactor.plan.selection import PhaseSelection
@@ -71,7 +73,7 @@ def _implement_prompt(
    `{implement_branch}` only."""
     else:
         checkout = f"""1. On the TARGET repo: `git fetch origin` and check out `{state.plan_branch}` (`git checkout -B {state.plan_branch} origin/{state.plan_branch}`).
-2. Create and push a branch named `{implement_branch}` from that plan source (or continue on the branch this cloud run already opened if it is a `{IMPLEMENT_PREFIX}*` branch).
+2. Create and push a branch named `{implement_branch}` from that plan source (or continue on the branch this cloud run already opened if it is a `{IMPLEMENT_PREFIX}*` branch). Use that exact name; do not force-push or overwrite an existing remote branch.
 3. Do not commit, amend, push, or check off phases on `{state.plan_branch}`. Leave the plan source exactly as you found it.
 4. Implementation, plan check-offs, and the last-phase walkthrough files go on
    `{implement_branch}` only."""
@@ -192,7 +194,7 @@ def run(
     if not state.analyze_branch:
         state.analyze_branch = config.legacy_ref
 
-    stamp = date.today().strftime("%Y%m%d")
+    stamp = allocate_refactor_stamp(config.modern_repo, IMPLEMENT_PREFIX)
     if source_is_implement:
         intended = source
         modern_ref = source

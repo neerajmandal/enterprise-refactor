@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from collections.abc import Sequence
 
@@ -42,15 +43,42 @@ _MONTHS = (
 _PICKER_WINDOW = 16
 
 
+_STAMP_DATE_ONLY = re.compile(r"^(\d{8})$")
+_STAMP_DATE_TIME = re.compile(r"^(\d{8})-(\d{6})(?:-\d+)?$")
+
+
+def _format_stamp_date(date_part: str) -> str | None:
+    if len(date_part) != 8 or not date_part.isdigit():
+        return None
+    month = int(date_part[4:6])
+    day = int(date_part[6:8])
+    if month < 1 or month > 12 or day < 1 or day > 31:
+        return None
+    return f"{day:>2} {_MONTHS[month - 1]} {date_part[:4]}"
+
+
 def _stamp_when(name: str, prefix: str) -> str:
     stamp = name.removeprefix(prefix)
-    if len(stamp) != 8 or not stamp.isdigit():
+    date_only = _STAMP_DATE_ONLY.match(stamp)
+    if date_only:
+        return _format_stamp_date(date_only.group(1)) or ""
+    date_time = _STAMP_DATE_TIME.match(stamp)
+    if not date_time:
         return ""
-    month = int(stamp[4:6])
-    day = int(stamp[6:8])
-    if month < 1 or month > 12 or day < 1 or day > 31:
+    when = _format_stamp_date(date_time.group(1))
+    if not when:
         return ""
-    return f"{day:>2} {_MONTHS[month - 1]} {stamp[:4]}"
+    time_part = date_time.group(2)
+    if len(time_part) != 6 or not time_part.isdigit():
+        return ""
+    hour, minute, second = (
+        int(time_part[0:2]),
+        int(time_part[2:4]),
+        int(time_part[4:6]),
+    )
+    if hour > 23 or minute > 59 or second > 59:
+        return ""
+    return f"{when} {hour:02d}:{minute:02d}:{second:02d}"
 
 
 def _kind_for(

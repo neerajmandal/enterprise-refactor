@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sys
-from datetime import date
 
 from cursor_sdk import CursorAgentError
 
@@ -14,6 +13,10 @@ from enterprise_refactor.integrations.cursor import (
     run_agent_prompt,
 )
 from enterprise_refactor.config import Config
+from enterprise_refactor.integrations.git.branches import (
+    ANALYZE_PREFIX,
+    allocate_refactor_stamp,
+)
 from enterprise_refactor.state import WorkflowState, save_state
 
 
@@ -27,7 +30,7 @@ The cloud environment already has both repositories checked out:
 
 Operational steps (do these around the discovery work below):
 
-1. Create and push a branch on the LEGACY repo named `refactor/analyze-{stamp}` (or continue on the branch this cloud run already opened if it is a refactor/analyze-* branch). Do not open a pull request.
+1. Create and push a branch on the LEGACY repo named `refactor/analyze-{stamp}` (or continue on the branch this cloud run already opened if it is a refactor/analyze-* branch). Use that exact name; do not force-push or overwrite an existing remote branch. Do not open a pull request.
 2. Use the TARGET repo only as context: existing stack, naming, and what is already modernized.
 3. Commit analysis artifacts on the LEGACY branch:
    - `docs/modernization/CURRENT_STATE_ANALYSIS.md`
@@ -210,7 +213,7 @@ artifacts: docs/modernization/CURRENT_STATE_ANALYSIS.md, docs/modernization/curr
 
 
 def run_analysis_workflow(config: Config, state: WorkflowState) -> int:
-    stamp = date.today().strftime("%Y%m%d")
+    stamp = allocate_refactor_stamp(config.legacy_repo, ANALYZE_PREFIX)
     print("workflow  Analyze", flush=True)
     try:
         with cloud_agent_session(

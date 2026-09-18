@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import sys
-from datetime import date
 
 from cursor_sdk import CursorAgentError
 
@@ -16,6 +15,10 @@ from enterprise_refactor.integrations.cursor import (
 )
 from enterprise_refactor.pickers.analyze_branch import resolve_legacy_plan_branch
 from enterprise_refactor.config import Config, clean
+from enterprise_refactor.integrations.git.branches import (
+    PLAN_PREFIX,
+    allocate_refactor_stamp,
+)
 from enterprise_refactor.state import WorkflowState, save_state
 from enterprise_refactor.ui.screens.home import leave_home_for_workflow
 from enterprise_refactor.ui.text import ask_long_text
@@ -52,7 +55,7 @@ trust that the VM is already on that branch (it may be on main).
 Operational steps (do these around the planning work below):
 
 1. On the LEGACY repo: `git fetch origin` and check out the remote branch `{state.analyze_branch}` (`git checkout -B {state.analyze_branch} origin/{state.analyze_branch}`). If that ref is missing, fail — do not invent analysis, do not stay on main, and do not create a new `refactor/analyze-*` branch.
-2. Create and push a branch on the TARGET repo named `refactor/plan-{stamp}` (or continue on the branch this cloud run already opened if it is a refactor/plan-* branch).
+2. Create and push a branch on the TARGET repo named `refactor/plan-{stamp}` (or continue on the branch this cloud run already opened if it is a refactor/plan-* branch). Use that exact name; do not force-push or overwrite an existing remote branch.
 3. Do not modify application code on either repo. Planning artifacts only.
 4. Commit on the TARGET branch:
    - `docs/refactor/plan.md`
@@ -198,7 +201,7 @@ def run(
     modernization_ask = resolve_modernization_ask(config, prompt)
     if not modernization_ask:
         return None
-    stamp = date.today().strftime("%Y%m%d")
+    stamp = allocate_refactor_stamp(config.modern_repo, PLAN_PREFIX)
     leave_home_for_workflow()
     print(f"analyze branch  {state.analyze_branch}", flush=True)
     print("workflow  Plan", flush=True)
