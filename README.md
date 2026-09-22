@@ -1,46 +1,77 @@
 # enterprise-refactor
 
-Interactive CLI that drives three Cursor Cloud Agent workflows: **Analyze**, **Plan**, and **Implement**. Each run starts a cloud agent in a named Cursor environment with **both** git repos checked out (legacy source and modern target).
+A terminal app that modernizes a legacy codebase into a new one, one step at a time, using [Cursor Cloud Agents](https://cursor.com/agents).
 
-Workflow diagram: [docs/architecture.md](docs/architecture.md).
+You give it two git repositories:
+
+- **Source** — the legacy system you are leaving behind
+- **Target** — the modern repository you are building
+
+Each step starts a cloud agent in a named Cursor environment with **both** repos checked out. The agent pushes its work to a dated `refactor/…` branch. You stay in the terminal: pick a step, watch the run, then come back to the menu.
 
 ```bash
 uv sync
 uv run enterprise-refactor
 ```
 
-Create an API key at [Cursor Dashboard → Integrations](https://cursor.com/dashboard/integrations).
+Create an API key at [Cursor Dashboard → Integrations](https://cursor.com/dashboard/integrations). A diagram of the three workflows is in [docs/architecture.md](docs/architecture.md).
 
-## How the CLI starts
+## What the three steps do
 
-1. Load `.env` if it exists (`os.environ.setdefault`, so a real env var wins).
-2. Resolve connection settings from flags, then env / `.env`:
-   - `CURSOR_API_KEY`
-   - `CURSOR_LEGACY_REPO` (or `CURSOR_REPO`)
-   - `CURSOR_MODERN_REPO`
-   - `CURSOR_ENV`
-3. If anything required is missing, draw the **REFACTOR** home screen in “waiting” mode and prompt for it. Valid repo values are a git URL or `owner/repo`. The API key is entered with a hidden prompt. Answers are written to `.env` (plus defaults for refs and model if those keys are new).
-4. Draw the home screen again with Environment, Model, Source repo, and Target repo, then either run a named workflow or open the menu.
+Run them in order. Each one reads what the previous step wrote.
 
-A TTY is required for prompts and the menu. Non-interactive use must pass `analyze`, `plan`, or `implement` and supply any missing values via flags or `.env`.
+| Step | You are asking | Where the result goes |
+| --- | --- | --- |
+| **Analyze** | “How does the legacy system work today?” | A discovery write-up on the **source** repo. No pull request. |
+| **Plan** | “Turn that picture into a phased modernization plan.” | A plan on the **target** repo, plus a pull request. |
+| **Implement** | “Build the phases I choose, and test them.” | Code and tests on the **target** repo. The last phase records a UI walkthrough. |
 
-## Home menu
+### Analyze
+
+Discovery only. The target repo is there for context; the agent does not change it.
+
+It pushes `refactor/analyze-YYYYMMDD-HHMMSS` on the **source** repo with:
+
+- `docs/modernization/CURRENT_STATE_ANALYSIS.md`
+- `docs/modernization/current-state.md`
+
+### Plan
+
+You pick which source branch to read (usually the newest analyze branch) and type what you want modernized. The agent checks out that branch, then writes a phased plan on the **target** repo and opens a pull request there.
+
+The branch is `refactor/plan-YYYYMMDD-HHMMSS`, with:
+
+- `docs/refactor/plan.md` — the plan in prose
+- `docs/refactor/plan.json` — the same plan as data the Implement step reads
+- `docs/refactor/phases/NN-<slug>.md` — one file per phase
+
+Every plan ends with a **computer-use** phase that exercises the UI. Earlier phases name a `test_command` and list the UI flows that last phase should cover.
+
+### Implement
+
+You pick a target **plan** or **implement** branch, then choose which phases to build. The agent codes each selected phase, checks it off, and runs that phase’s unit test (`test_command`).
+
+Computer-use UI testing runs only as the **last** plan phase, and only after every unit test has passed. That pass adds `docs/refactor/walkthrough.mp4` and a pull request.
+
+Work lands on `refactor/implement-YYYYMMDD-HHMMSS` on the target repo.
+
+## Using the menu
 
 ```bash
 uv run enterprise-refactor
 ```
 
-Full-screen TUI. **↑↓** or **j/k** move, **1–5** jump, **enter** selects, **q** quits. After a workflow finishes you return to the menu (highlight moves to the next typical step).
+The home screen is a full-screen menu. **↑↓** or **j/k** move, **1–5** jump, **enter** selects, **q** quits. When a workflow finishes you return to the menu, with the highlight on the next typical step.
 
-| Item | What happens |
+| Item | What it does |
 | --- | --- |
-| **Analyze** | Discovery-only map of the legacy system. Target repo is context only. Cloud agent pushes `refactor/analyze-YYYYMMDD-HHMMSS` on the **legacy** repo (no PR) with `docs/modernization/CURRENT_STATE_ANALYSIS.md` and `docs/modernization/current-state.md`. |
-| **Plan** | Pick which **legacy** remote branch to read, then enter a modernization prompt. Agent checks out that branch, writes a phased plan on `refactor/plan-YYYYMMDD-HHMMSS` on the **target** repo (`docs/refactor/plan.md`, `docs/refactor/plan.json`, `docs/refactor/phases/NN-<slug>.md`), and opens a PR on the target only. Every plan ends with a default **computer-use** UI phase. Earlier phases list `test_command` plus `computer_use` flows for that last UI pass. |
-| **Implement** | Pick a target **plan** or **implement** branch, then choose phases. Each implement phase is coded, checked off, and unit-tested (`test_command`). Computer-use UI testing runs only as the last plan phase, after every unit test has passed (`docs/refactor/walkthrough.mp4` + PR). |
-| **Runs** | Read-only last agent IDs and branch names from `.refactor/state.json`. Enter or **q** returns. |
-| **Settings** | Session-only override of legacy repo, modern repo, or API key. Updates process env; **does not write `.env`**. Env name and model stay as started (use flags / `.env`). |
+| **Analyze** | Starts the discovery run described above. |
+| **Plan** | Asks which source branch to read, then asks for the modernization prompt. |
+| **Implement** | Asks which target branch and which phases to build. |
+| **Runs** | Shows the last agent IDs and branch names from `.refactor/state.json`. Read-only. **Enter** or **q** returns. |
+| **Settings** | Override the source repo, target repo, or API key for this session only. This updates the process environment and **does not write `.env`**. The environment name and model stay as they were at startup (change those with flags or `.env`). |
 
-Skip the menu:
+Skip the menu and run one step directly:
 
 ```bash
 uv run enterprise-refactor analyze
@@ -48,81 +79,88 @@ uv run enterprise-refactor plan
 uv run enterprise-refactor implement
 ```
 
-## Plan branch picker
+A terminal is required for prompts and the menu. To run without a terminal, pass `analyze`, `plan`, or `implement` and supply any missing values with flags or `.env`.
 
-Unless you pass `--analyze-branch`:
+## First launch
 
-1. List remote heads on the legacy repo (`git ls-remote --heads` and `gh api` if available; names are merged).
-2. Sort `refactor/analyze-*` first (newest date stamp first), then other branches.
-3. Default selection is the newest analyze branch, else last used from state, else `--legacy-ref` / `main`.
-4. **↑↓** / enter to choose, **esc** / Back to cancel (no agent).
+1. If a `.env` file exists, it is loaded. A variable already set in the environment wins over `.env`.
+2. The CLI looks for connection settings in flags, then the environment:
+   - `CURSOR_API_KEY`
+   - `CURSOR_LEGACY_REPO` (or `CURSOR_REPO`)
+   - `CURSOR_MODERN_REPO`
+   - `CURSOR_ENV`
+3. Anything still missing is asked for on a waiting home screen. A repo can be a git URL or `owner/repo`. The API key is hidden as you type. Answers are saved to `.env`, along with defaults for refs and model if those keys are new.
+4. The home screen redraws with the environment, model, source repo, and target repo, then runs the step you named or opens the menu.
 
-If remotes cannot be listed, the CLI asks for a branch name. Non-TTY Plan uses `--analyze-branch` or the branch already in `.refactor/state.json`.
+## Choosing a branch and phases
 
-The modernization ask comes **after** the branch is chosen (`--prompt`, `CURSOR_PLAN_PROMPT`, or a prompt). That value is not written to `.env`.
+### Plan
 
-## Implement branch and phase pickers
+If you do not pass `--analyze-branch`, the CLI lists remote branches on the source repo (`git ls-remote` and `gh`, merged when both work). Analyze branches (`refactor/analyze-*`) sort first, newest date stamp first. The default is the newest analyze branch, then the last branch saved in state, then `--legacy-ref` / `main`.
 
-Unless you pass `--plan-branch`:
+**↑↓** and **enter** choose. **Esc** or Back cancels and does not start an agent. If the remote list fails, you are asked to type a branch name. Without a terminal, Plan uses `--analyze-branch` or the branch already in `.refactor/state.json`.
 
-1. List remote heads on the **target** repo.
-2. Sort `refactor/implement-*` first (newest date stamp first), then `refactor/plan-*`, then other branches.
-3. Default selection is the newest implement branch, else the newest plan branch, else last used from state, else `--modern-ref` / `main`.
-4. **↑↓** / enter to choose, **esc** / Back to cancel (no agent).
+The modernization prompt comes **after** the branch (`--prompt`, `CURSOR_PLAN_PROMPT`, or a typed prompt). It is not saved to `.env`.
 
-Then the CLI fetches `docs/refactor/plan.json` from that branch (`gh api`, then a shallow `git fetch` if needed) and draws the phase list:
+### Implement
 
-- Done phases are checked and locked.
-- Pending phases start unchecked. **space** toggles a pending phase.
-- **Implement all remaining** (`a`) runs every phase that is not `done`: unit tests first, last-phase UI last.
-- **Implement selected** runs the toggled pending phases and any undone dependencies. UI computer-use runs only if that selection includes the last phase and all unit tests passed.
-- **esc** / Back returns to the branch list.
+If you do not pass `--plan-branch`, the CLI lists remote branches on the **target** repo. Implement branches sort first, then plan branches, then everything else (newest date stamp first within each group). The default is the newest implement branch, then the newest plan branch, then the last branch in state, then `--modern-ref` / `main`.
 
-The last plan phase is always computer-use. Existing `plan.json` files that omit it still get a virtual `99-computer-use` phase in the picker.
+**↑↓** and **enter** choose. **Esc** or Back cancels.
 
-If `plan.json` cannot be read, you can still choose **Implement all remaining** and the agent implements every undone phase on the branch.
+The CLI then reads `docs/refactor/plan.json` from that branch and shows the phases:
 
-Non-TTY Implement uses `--plan-branch` or the branch already in `.refactor/state.json`. Pass `--phases 01-foo,03-bar` to name phase ids; omit `--phases` to implement all remaining.
+- Finished phases are checked and locked.
+- Pending phases start unchecked. **Space** toggles one.
+- **Implement all remaining** (`a`) runs every phase that is not done: unit tests first, UI last.
+- **Implement selected** runs the phases you toggled, plus any unfinished phases they depend on. The UI computer-use pass runs only when your selection includes the last phase and every unit test has passed.
+- **Esc** or Back returns to the branch list.
 
-## What a cloud run does
+The last plan phase is always computer-use. Older `plan.json` files that omit it still show a virtual `99-computer-use` phase.
 
-The CLI creates a Cursor Cloud Agent (`cursor-sdk`) with:
+If `plan.json` cannot be read, you can still choose **Implement all remaining**. The agent then implements every undone phase on the branch.
 
-- the selected `--model` / `CURSOR_MODEL` (default `composer-2.5`)
-- `CURSOR_ENV` as the named cloud environment
-- both repos as `CloudRepository` entries (`owner/repo` is expanded to `https://github.com/owner/repo.git`)
-- starting refs: Analyze uses `--legacy-ref` / `--modern-ref` (default `main`); Plan starts the legacy side on the chosen analyze branch; Implement starts the target side on the chosen plan or implement branch
+Without a terminal, Implement uses `--plan-branch` or the branch in `.refactor/state.json`. Pass `--phases 01-foo,03-bar` to name phase ids. Omit `--phases` to implement everything remaining.
 
-While the agent works, the CLI streams thinking, tools, tasks, status, usage, and assistant text, then polls until the cloud run finishes (or fails). Agent IDs print as `https://cursor.com/agents/<id>` when they look like `bc-…`.
+## What happens during a run
 
-Workflow IDs and branch names are stored in gitignored `.refactor/state.json`. Secrets stay in `.env`.
+The CLI starts a Cursor Cloud Agent (`cursor-sdk`) with:
 
-## Flags and env
+- the model from `--model` / `CURSOR_MODEL` (default `composer-2.5`)
+- the named cloud environment from `CURSOR_ENV`
+- both repos (`owner/repo` is expanded to `https://github.com/owner/repo.git`)
+- a starting ref for each repo: Analyze uses `--legacy-ref` and `--modern-ref` (default `main`); Plan starts the source side on the analyze branch you picked; Implement starts the target side on the plan or implement branch you picked
+
+While the agent works, the CLI streams its thinking, tool calls, tasks, status, usage, and reply, then waits until the cloud run finishes or fails. Agent IDs that look like `bc-…` are printed as `https://cursor.com/agents/<id>`.
+
+Run IDs and branch names are stored in `.refactor/state.json` (gitignored). Secrets stay in `.env`.
+
+## Flags and environment
 
 | Flag / env | Default | Purpose |
 | --- | --- | --- |
-| `--legacy-repo` / `CURSOR_LEGACY_REPO` | prompted / `.env` | Legacy source git URL or `owner/repo` |
-| `--modern-repo` / `CURSOR_MODERN_REPO` | prompted / `.env` | Modern target git URL or `owner/repo` |
+| `--legacy-repo` / `CURSOR_LEGACY_REPO` | prompted / `.env` | Source git URL or `owner/repo` |
+| `--modern-repo` / `CURSOR_MODERN_REPO` | prompted / `.env` | Target git URL or `owner/repo` |
 | `--cursor-env` / `CURSOR_ENV` | prompted / `.env` | Cursor cloud environment name |
-| `--legacy-ref` / `CURSOR_LEGACY_REF` | `main` | Legacy starting branch or SHA (Analyze) |
+| `--legacy-ref` / `CURSOR_LEGACY_REF` | `main` | Source starting branch or SHA (Analyze) |
 | `--modern-ref` / `CURSOR_MODERN_REF` | `main` | Target starting branch or SHA |
 | `--model` / `CURSOR_MODEL` | `composer-2.5` | Model id |
 | `--prompt` / `CURSOR_PLAN_PROMPT` | prompted | Plan modernization ask (not saved to `.env`) |
-| `--analyze-branch` | picker / state | Legacy branch Plan reads (skips the picker) |
+| `--analyze-branch` | picker / state | Source branch Plan reads (skips the picker) |
 | `--plan-branch` | picker / state | Target plan or implement branch Implement reads (skips the branch picker) |
 | `--phases` | all remaining | Comma-separated `plan.json` ids (skips the phase picker) |
 | `CURSOR_API_KEY` | prompted / `.env` | User or service-account API key |
 
-`CURSOR_REPO` is accepted as an alias for the legacy source.
+`CURSOR_REPO` is accepted as an alias for the source repo.
 
 ## Exit codes
 
-Used when you pass `analyze`, `plan`, or `implement` on the command line:
+These apply when you pass `analyze`, `plan`, or `implement` on the command line:
 
 | Code | Meaning |
 | --- | --- |
-| `0` | Workflow finished |
-| `1` | Never started (auth/config/network, or Implement without saved Analyze/Plan branches) |
-| `2` | Cloud run started, then failed |
+| `0` | The workflow finished |
+| `1` | It never started (auth, config, network, or Implement without a saved Analyze/Plan branch) |
+| `2` | The cloud run started, then failed |
 
 Quitting the home menu, or backing out of the Plan branch picker, exits `0`.
